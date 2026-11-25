@@ -141,6 +141,7 @@ test('visible voice control plays a real signal before Start, even with previews
   await expect(page.locator('.practice-session')).toHaveAttribute('data-phase', 'ready');
   await voice.uncheck();
   await expect.poll(() => audioLevel(page, 'level')).toBeLessThan(0.0001);
+  await expect(page.locator('.practice-session')).toHaveAttribute('data-settings-saving', 'false');
   await page.reload();
   await expect(voice).not.toBeChecked();
 });
@@ -186,6 +187,7 @@ test('hint shows and plays the assigned chord inline, follows changes and switch
   );
   await hint.click();
   await expect(piano).toHaveCount(0);
+  await expect(page.locator('.practice-session')).toHaveAttribute('data-settings-saving', 'false');
   await expect(page.locator('.practice-session')).toHaveAttribute('data-phase', 'playing');
   await expect.poll(() => audioLevel(page, 'level')).toBeLessThan(0.0001);
   await page.getByRole('button', { name: 'Пауза', exact: true }).click();

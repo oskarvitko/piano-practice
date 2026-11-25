@@ -23,6 +23,13 @@ export class TrainerRepository {
       await this.db.settings.put({ key: 'practice-last', value: config.trainer });
     });
   }
+  async saveSessionSettings(session: TrainerSession) {
+    const snapshot = structuredClone(session);
+    await this.db.transaction('rw', this.db.settings, this.db.trainerSessions, async () => {
+      await this.saveConfig(snapshot.config);
+      await this.checkpoint(snapshot);
+    });
+  }
   async lastTrainer() {
     const row = await this.db.settings.get('practice-last');
     return (

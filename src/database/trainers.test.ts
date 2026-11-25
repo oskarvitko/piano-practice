@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { PracticeDB } from './db';
 import { TrainerRepository } from './trainers';
 import { defaultConfig } from '../core/practice/config';
@@ -63,4 +63,21 @@ it('exports/imports Practice entities and accepts legacy backups atomically', as
   delete legacy.difficultTasks;
   await importBackup(db, legacy);
   expect(await db.trainerSessions.count()).toBe(0);
+});
+it('commits session switches and reusable settings together and rolls both back on failure', async () => {
+  const repo = new TrainerRepository(make());
+  const engine = new PracticeEngine(defaultConfig('degree'), practiceLibrary, [], 42);
+  engine.session.config.channels.voice.enabled = true;
+  await repo.saveSessionSettings(engine.snapshot());
+  expect((await repo.config('degree')).channels.voice.enabled).toBe(true);
+  expect((await repo.unfinished())?.config.channels.voice.enabled).toBe(true);
+  engine.session.config.channels.voice.enabled = false;
+  const failure = vi.spyOn(repo, 'checkpoint').mockRejectedValueOnce(new Error('storage failed'));
+  await expect(repo.saveSessionSettings(engine.snapshot())).rejects.toThrow('storage failed');
+  failure.mockRestore();
+  expect((await repo.config('degree')).channels.voice.enabled).toBe(true);
+  expect((await repo.unfinished())?.config.channels.voice.enabled).toBe(true);
+  await repo.saveSessionSettings(engine.snapshot());
+  expect((await repo.config('degree')).channels.voice.enabled).toBe(false);
+  expect((await repo.unfinished())?.config.channels.voice.enabled).toBe(false);
 });

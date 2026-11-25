@@ -219,6 +219,7 @@ export function PracticeSessionScreen() {
     <div
       className={`practice-session ${displayKeyboard ? 'has-keyboard-hint' : ''}`}
       data-phase={session.phase}
+      data-settings-saving={state.settingsSaving}
     >
       <header className="practice-session-heading">
         <Link to="/practice">Practice</Link>
@@ -331,6 +332,7 @@ export function PracticeSessionScreen() {
           {state.voiceLoading ? 'Загружаем…' : 'Проверить голос'}
         </button>
         {state.voiceMessage && <p role="status">{state.voiceMessage}</p>}
+        {state.settingsSaving && <p role="status">Сохраняем настройки…</p>}
       </div>
       {displayKeyboard && (
         <section className="practice-live-hint" aria-label="Подсказка текущего задания">

@@ -26,6 +26,7 @@ interface State {
   bass: number[];
   voiceLoading: boolean;
   voiceMessage: string | null;
+  settingsSaving: boolean;
 }
 class PracticeController {
   private engine?: PracticeEngine;
@@ -42,9 +43,11 @@ class PracticeController {
     bass: [],
     voiceLoading: false,
     voiceMessage: null,
+    settingsSaving: false,
   };
   private generation = 0;
   private voiceOperation = 0;
+  private settingsOperation = 0;
   private tick = 0;
   private lastSave = 0;
   private held: { end: number; notes: number[]; hand: 'left' | 'right'; channel: Channel }[] = [];
@@ -290,11 +293,19 @@ class PracticeController {
     }
     this.engine?.setConfig(config);
     audioService.configurePracticeChannels(config.channels);
-    void trainerRepository
-      .saveConfig(config)
-      .catch(() => this.update({ error: 'Не удалось сохранить настройки' }));
-    this.update();
-    this.save();
+    const token = ++this.settingsOperation;
+    this.update({ settingsSaving: true });
+    const saved = this.engine
+      ? trainerRepository.saveSessionSettings(this.engine.snapshot())
+      : trainerRepository.saveConfig(config);
+    void saved
+      .then(() => {
+        if (token === this.settingsOperation) this.update({ settingsSaving: false });
+      })
+      .catch(() => {
+        if (token === this.settingsOperation)
+          this.update({ settingsSaving: false, error: 'Не удалось сохранить настройки' });
+      });
     if (voiceChanged) void this.previewVoice();
   }
   toggleHint() {
