@@ -1,0 +1,18 @@
+# Roadmap
+- [ ] Scaffold React/Vite/TS, lint, tests, GitHub Pages workflow
+- [ ] PWA manifest, icons, SW offline and safe update
+- [ ] Dexie schema, repositories, migrations, export/import
+- [ ] Music engine and tests for all roots, intervals, spelling
+- [ ] SVG keyboard and four visualization modes
+- [ ] Program registry and lesson engine with state tests
+- [ ] Lesson screen, step sheet, program overview, completion, selection/settings
+- [ ] Tone.js audio adapter, licensed local piano samples, synth fallback and offline caching
+- [ ] Audio player: notes/chords/runs/progressions, BPM, loop, synchronized SVG, metronome
+- [ ] Audio timing/cancellation tests and manual iPhone audio tests
+- [ ] Timer with background pause, checkpoints, wake lock
+- [ ] Review scheduling, frozen review steps, mastery tracking
+- [ ] Implement 48 lessons from TRAINING_PROGRAM.md; validate all IDs, durations and note sequences
+- [ ] Accessibility, light/dark, safe areas, iPhone layout
+- [ ] Integration tests: resume, replay, completion, import, second program
+- [ ] Manual iPhone offline/install/update tests; record results, do not claim device testing if unavailable
+- [ ] Production deployment

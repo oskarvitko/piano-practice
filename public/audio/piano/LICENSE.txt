@@ -1,0 +1,8 @@
+Salamander Grand Piano — Alexander Holm
+License: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+https://creativecommons.org/licenses/by/3.0/
+Source: https://github.com/Tonejs/audio/tree/master/salamander
+Original recording: Alexander Holm, Yamaha C5 grand piano.
+Nine MP3 samples redistributed unmodified from the Tone.js audio repository.
+This application selects a subset and pitch-shifts samples at playback time.
+See SOURCE-README.txt for the original author's notes.
