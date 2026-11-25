@@ -14,7 +14,7 @@ import {
   Sparkles,
   Trophy,
 } from 'lucide-react';
-import { getProgram } from '../programs/registry';
+import { exerciseCatalog, getProgram } from '../programs/registry';
 import { allLessons, attemptSteps, completionFraction, getNextLesson } from '../core/lesson-engine';
 import { getNoteName } from '../core/music';
 import type { Lesson, PracticeSession, Program, Step } from '../core/types';
@@ -23,6 +23,7 @@ import { repository, useAppStore } from '../stores/app';
 import { audioService } from '../audio/service';
 import { Dialog, ErrorMessage, formatTime, IconButton, Loading, Progress } from '../components/ui';
 import { ExerciseViewer } from '../components/ExerciseViewer';
+import { MusicalExamplePlayer } from '../components/MusicalExamplePlayer';
 import { usePracticeTimer } from '../features/timer/usePracticeTimer';
 import { useNotifications } from '../stores/notifications';
 
@@ -321,8 +322,16 @@ function StepWorkspace({
               key={exercise.id}
               exercise={exercise}
               initialHidden={Boolean(step.assessmentRoots || step.reviewKeys)}
+              examples={
+                exercise.examples ??
+                step.examples ??
+                exerciseCatalog(program).get(exercise.id)?.examples
+              }
             />
           )}
+          {!exercise && step.examples?.length ? (
+            <MusicalExamplePlayer examples={step.examples} />
+          ) : null}
           {step.reviewKeys && (
             <section className="self-check">
               <h3>Как прошло повторение?</h3>

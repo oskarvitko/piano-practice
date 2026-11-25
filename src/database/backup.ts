@@ -45,6 +45,58 @@ const visualization = z.discriminatedUnion('type', [
       .max(32),
   }),
 ]);
+const musicalExample = z
+  .object({
+    id,
+    title: z.string(),
+    description: z.string(),
+    root: midi,
+    bpm: z.number().min(40).max(180),
+    beatsPerBar: z.number().int().min(1).max(12),
+    lengthBeats: z.number().positive().max(256),
+    progression: z
+      .array(
+        z.object({
+          name: z.string(),
+          symbol: z.string(),
+          degree,
+          quality: z.enum(['major', 'minor', 'dominant7']),
+          notes: z.array(midi).min(1).max(24),
+          startBeat: time,
+          durationBeats: z.number().positive().max(256),
+        }),
+      )
+      .min(1)
+      .max(64),
+    events: z
+      .array(
+        z.object({
+          startBeat: time,
+          durationBeats: z.number().positive().max(256),
+          notes: z.array(midi).min(1).max(24),
+          hand: z.enum(['left', 'right']),
+          role: z.enum(['bass', 'chord', 'melody']),
+          velocity: z.number().min(0).max(1).optional(),
+          degrees: z.array(degree).max(24).optional(),
+        }),
+      )
+      .min(1)
+      .max(1024),
+    targetNotes: z
+      .array(z.object({ beat: time, note: midi, chord: z.string(), function: z.string() }))
+      .max(128),
+  })
+  .refine(
+    (example) =>
+      example.events.every(
+        (event) => event.startBeat + event.durationBeats <= example.lengthBeats,
+      ) &&
+      example.progression.every(
+        (chord) => chord.startBeat + chord.durationBeats <= example.lengthBeats,
+      ) &&
+      example.targetNotes.every((target) => target.beat < example.lengthBeats),
+    'События выходят за пределы фразы',
+  );
 const exercise = z.object({
   id,
   title: z.string(),
@@ -63,6 +115,7 @@ const exercise = z.object({
   fingering: z.record(z.string(), z.string()).optional(),
   formula: z.string().optional(),
   target: z.string().optional(),
+  examples: z.array(musicalExample).max(32).optional(),
 });
 const step = z.object({
   id,
@@ -74,6 +127,7 @@ const step = z.object({
   reviewKeys: z.array(id).optional(),
   reviewSlot: z.boolean().optional(),
   assessmentRoots: z.array(midi).optional(),
+  examples: z.array(musicalExample).max(32).optional(),
 });
 const preferences = z.object({
   theme: z.enum(['dark', 'light', 'system']),

@@ -1,5 +1,6 @@
 import type { Exercise, Lesson, Program, ScaleType, Step } from '../../core/types';
 import { getChordNotes, getNoteName, parseDegrees, SCALE_FORMULAS } from '../../core/music';
+import { examplesFor } from './examples';
 
 export const PATTERNS = {
   P1: '1 2 3 | 2 3 4 | 3 4 5 | 4 5 6',
@@ -117,7 +118,7 @@ export function scaleExercise(root: number, scale: ScaleType): Exercise {
       : {}),
   };
 }
-function patternExercise(root: number, pattern: PatternId): Exercise {
+function patternExercise(root: number, pattern: PatternId, advanced = false): Exercise {
   const key = getNoteName(root, root);
   return {
     id: `${key.toLowerCase()}-${pattern.toLowerCase()}`,
@@ -136,9 +137,10 @@ function patternExercise(root: number, pattern: PatternId): Exercise {
     ],
     visualization: { type: 'sequence', root, pattern: parseDegrees(PATTERNS[pattern]) },
     playback: { bpm: 60, subdivision: 2 },
+    examples: examplesFor(root, pattern, advanced),
   };
 }
-function runExercise(root: number, id: string): Exercise {
+function runExercise(root: number, id: string, advanced = false): Exercise {
   const runs: Record<
     string,
     { title: string; formula: string; target: string; instruction: string }
@@ -199,9 +201,15 @@ function runExercise(root: number, id: string): Exercise {
     ],
     visualization: { type: 'sequence', root, pattern: parseDegrees(run.formula) },
     playback: { bpm: 60, subdivision: 2 },
+    examples: examplesFor(root, id, advanced),
   };
 }
-function progressionExercise(root: number, degrees: string[]): Exercise {
+function progressionExercise(
+  root: number,
+  degrees: string[],
+  topic = 'fills',
+  advanced = false,
+): Exercise {
   const offsets: Record<string, number> = { I: 0, IV: 5, V: 7, vi: 9 };
   return {
     id: `${getNoteName(root, root).toLowerCase()}-progression-${degrees.join('-')}`,
@@ -221,11 +229,12 @@ function progressionExercise(root: number, degrees: string[]): Exercise {
       })),
     },
     playback: { bpm: 60, holdBeats: 4 },
+    examples: examplesFor(root, `improv-${topic}`, advanced),
   };
 }
 export function assessmentExercise(root: number): Exercise {
   return {
-    ...progressionExercise(root, ['I', 'IV', 'vi', 'V']),
+    ...progressionExercise(root, ['I', 'IV', 'vi', 'V'], 'assessment'),
     id: `assessment-${getNoteName(root, root).toLowerCase()}`,
     title: `Проверка ${getNoteName(root, root)}`,
     instructions: [
@@ -276,7 +285,9 @@ function makeSteps(
           : 'Повторяй маленькими группами, затем соедини в одну фразу.',
         ...split,
       ],
-      exercises: roots.flatMap((r) => topic.patterns.map((p) => patternExercise(r, p))),
+      exercises: roots.flatMap((r) =>
+        topic.patterns.map((p) => patternExercise(r, p, consolidation)),
+      ),
     },
     {
       id: `${lessonId}-runs`,
@@ -286,7 +297,7 @@ function makeSteps(
         'Сначала найди целевую ноту следующего аккорда, затем сыграй ведущую к ней фразу.',
         ...split,
       ],
-      exercises: roots.flatMap((r) => topic.runs.map((id) => runExercise(r, id))),
+      exercises: roots.flatMap((r) => topic.runs.map((id) => runExercise(r, id, consolidation))),
     },
     {
       id: `${lessonId}-improv`,
@@ -307,7 +318,7 @@ function makeSteps(
       exercises: roots.map((r) =>
         topic.id === 'assessment'
           ? assessmentExercise(r)
-          : progressionExercise(r, topic.progression),
+          : progressionExercise(r, topic.progression, topic.id, consolidation),
       ),
       ...(topic.id === 'assessment' ? { assessmentRoots: roots } : {}),
     },

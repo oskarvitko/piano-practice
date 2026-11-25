@@ -27,6 +27,43 @@ export interface Exercise {
   fingering?: Record<number, string>;
   formula?: string;
   target?: string;
+  examples?: MusicalExample[];
+}
+export interface MusicalEvent {
+  startBeat: number;
+  durationBeats: number;
+  notes: number[];
+  hand: 'left' | 'right';
+  role: 'bass' | 'chord' | 'melody';
+  velocity?: number;
+  degrees?: Degree[];
+}
+export interface MusicalChord {
+  name: string;
+  symbol: string;
+  degree: Degree;
+  quality: 'major' | 'minor' | 'dominant7';
+  notes: number[];
+  startBeat: number;
+  durationBeats: number;
+}
+export interface TargetNote {
+  beat: number;
+  note: number;
+  chord: string;
+  function: string;
+}
+export interface MusicalExample {
+  id: string;
+  title: string;
+  description: string;
+  root: number;
+  bpm: number;
+  beatsPerBar: number;
+  lengthBeats: number;
+  progression: MusicalChord[];
+  events: MusicalEvent[];
+  targetNotes: TargetNote[];
 }
 export interface Step {
   id: string;
@@ -38,6 +75,7 @@ export interface Step {
   reviewKeys?: string[];
   reviewSlot?: boolean;
   assessmentRoots?: number[];
+  examples?: MusicalExample[];
 }
 export interface Lesson {
   id: string;
@@ -66,11 +104,15 @@ export interface PlaybackEvent {
   notes: number[];
   beat: number;
   durationBeats: number;
+  hand?: 'left' | 'right';
+  velocity?: number;
 }
 export interface PlaybackPlan {
+  id?: string;
   bpm: number;
   events: PlaybackEvent[];
   lengthBeats: number;
+  legato?: boolean;
 }
 export type Status = 'active' | 'completed';
 export interface ProgramProgress {

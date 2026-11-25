@@ -80,6 +80,27 @@ it('resumes the last visited step with timer checkpoint without marking it compl
   expect(resumed.steps[resumed.currentStepId].timerSeconds).toBe(23);
   expect(await db.stepProgress.count()).toBe(0);
 });
+it('preserves musical examples in frozen reviews and accepts old snapshots without them', async () => {
+  const session = await repo.startLesson(program.id, lessons[0].id);
+  const frozen = { ...lessons[0].steps[3], id: lessons[0].steps[0].id };
+  await db.practiceSessions.update(session.id, { frozenReviewStep: frozen });
+  const backup = await exportBackup(db);
+  await importBackup(db, validateBackup(JSON.stringify(backup), programs).backup);
+  expect(
+    (await db.practiceSessions.get(session.id))?.frozenReviewStep?.exercises[0].examples,
+  ).toEqual(frozen.exercises[0].examples);
+  const legacy = structuredClone(backup);
+  legacy.practiceSessions[0].frozenReviewStep!.exercises.forEach((exercise) => {
+    delete exercise.examples;
+  });
+  await importBackup(db, validateBackup(JSON.stringify(legacy), programs).backup);
+  expect((await repo.startLesson(program.id, lessons[0].id)).id).toBe(session.id);
+  const corrupt = structuredClone(backup);
+  corrupt.practiceSessions[0].frozenReviewStep!.exercises[0].examples![0].events[0].durationBeats =
+    -1;
+  expect(() => validateBackup(JSON.stringify(corrupt), programs)).toThrow('Некорректный');
+  expect(await db.practiceSessions.count()).toBe(1);
+});
 it('completes atomically, is idempotent, and preserves achievements during replay', async () => {
   const s = await repo.startLesson(program.id, lessons[0].id);
   for (const step of lessons[0].steps) await repo.completeStep(s.id, step.id);

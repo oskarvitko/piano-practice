@@ -118,5 +118,5 @@ export function createPlaybackPlan(exercise: Exercise, bpm?: number): PlaybackPl
     beat += durationBeats;
     return event;
   });
-  return { bpm: bpm ?? meta.bpm ?? 80, events, lengthBeats: beat };
+  return { id: exercise.id, bpm: bpm ?? meta.bpm ?? 80, events, lengthBeats: beat };
 }

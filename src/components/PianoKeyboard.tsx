@@ -1,9 +1,13 @@
 import { getKeyboardRange, getNoteName, isBlackKey, pitchClass } from '../core/music';
+import { useId } from 'react';
 import { defaultPreferences, type KeyboardPreferences } from '../core/types';
 interface Props {
   notes: number[];
   rangeNotes?: number[];
   active?: number[];
+  activeLeft?: number[];
+  activeRight?: number[];
+  targets?: number[];
   root: number;
   labels?: Record<number, string>;
   names?: Record<number, string>;
@@ -16,6 +20,9 @@ export function PianoKeyboard({
   notes,
   rangeNotes,
   active = [],
+  activeLeft = [],
+  activeRight = [],
+  targets = [],
   root,
   labels = {},
   names = {},
@@ -24,6 +31,7 @@ export function PianoKeyboard({
   onNote,
   compact = false,
 }: Props) {
+  const mixedId = useId().replaceAll(':', '');
   const range = getKeyboardRange(rangeNotes ?? notes);
   const all = Array.from({ length: range.end - range.start + 1 }, (_, i) => i + range.start);
   const white = all.filter((n) => !isBlackKey(n));
@@ -34,6 +42,9 @@ export function PianoKeyboard({
     const x = black ? whiteBefore * 42 - 13 : whiteBefore * 42;
     const chosen = notes.includes(note);
     const playing = active.includes(note);
+    const left = activeLeft.includes(note);
+    const right = activeRight.includes(note);
+    const target = targets.includes(note);
     const tonic = pitchClass(note) === pitchClass(root);
     const name = names[note] ?? getNoteName(note, root, true);
     const degree =
@@ -52,10 +63,10 @@ export function PianoKeyboard({
     return (
       <g
         key={note}
-        className={`piano-key ${black ? 'black' : 'white'} ${chosen ? 'selected' : ''} ${playing ? 'playing' : ''}`}
+        className={`piano-key ${black ? 'black' : 'white'} ${chosen ? 'selected' : ''} ${playing ? 'playing' : ''} ${left ? 'left-hand' : ''} ${right ? 'right-hand' : ''} ${target ? 'target-key' : ''}`}
         role={onNote ? 'button' : undefined}
         tabIndex={onNote ? 0 : undefined}
-        aria-label={`${name}${tonic ? ', тоника' : ''}${labels[note] ? `, ступень ${labels[note]}` : ''}${playing ? ', звучит' : ''}`}
+        aria-label={`${name}${tonic ? ', тоника' : ''}${labels[note] ? `, ступень ${labels[note]}` : ''}${playing ? ', звучит' : ''}${left ? ', левая рука' : ''}${right ? ', правая рука' : ''}${target ? ', целевая нота' : ''}`}
         onClick={() => onNote?.(note)}
         onKeyDown={(e) => {
           if (onNote && (e.key === 'Enter' || e.key === ' ')) {
@@ -70,6 +81,7 @@ export function PianoKeyboard({
           width={black ? 26 : 40}
           height={black ? height * 0.61 : height - 2}
           rx={black ? 4 : 5}
+          style={left && right ? { fill: `url(#${mixedId})` } : undefined}
         />
         {chosen && display.degrees && (
           <text
@@ -105,7 +117,18 @@ export function PianoKeyboard({
             r={3.5}
           />
         )}
-        {playing && (
+        {left && (
+          <circle
+            className="active-marker"
+            cx={x + (black ? 14 : 21)}
+            cy={right ? 32 : 20}
+            r={3.5}
+          />
+        )}
+        {target && (
+          <path className="target-marker" d={`M${x + (black ? 14 : 21)} 6 l4 4 l-4 4 l-4 -4 z`} />
+        )}
+        {playing && (!left || right) && (
           <path className="active-marker" d={`M${x + (black ? 10 : 17)} 18 l4 6 l4 -6 z`} />
         )}
       </g>
@@ -125,6 +148,12 @@ export function PianoKeyboard({
         viewBox={`0 0 ${width} ${height}`}
         style={{ minWidth: compact ? undefined : Math.max(300, white.length * 29), width: '100%' }}
       >
+        <defs>
+          <linearGradient id={mixedId}>
+            <stop offset="50%" stopColor="var(--left-hand-key)" />
+            <stop offset="50%" stopColor="var(--right-hand-key)" />
+          </linearGradient>
+        </defs>
         {white.map((n) => key(n, false))}
         {all.filter(isBlackKey).map((n) => key(n, true))}
       </svg>

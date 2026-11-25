@@ -1,22 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  EyeOff,
-  Hand,
-  Play,
-  Square,
-  Pause,
-  Repeat2,
-  Volume2,
-  VolumeX,
-  Minus,
-  Plus,
-  Music2,
-} from 'lucide-react';
-import { defaultPreferences, type Exercise } from '../core/types';
+import { ChevronLeft, ChevronRight, Eye, EyeOff, Hand, Music2 } from 'lucide-react';
+import type { Exercise, MusicalExample } from '../core/types';
 import {
   createPlaybackPlan,
   degreeLabel,
@@ -30,9 +15,60 @@ import {
 import { audioService } from '../audio/service';
 import { useAppStore } from '../stores/app';
 import { PianoKeyboard } from './PianoKeyboard';
-import { ErrorMessage, IconButton } from './ui';
+import { IconButton } from './ui';
+import { AudioControls } from './AudioControls';
+import { MusicalExamplePlayer } from './MusicalExamplePlayer';
 
 export function ExerciseViewer({
+  exercise,
+  initialHidden = false,
+  examples = exercise.examples ?? [],
+}: {
+  exercise: Exercise;
+  initialHidden?: boolean;
+  examples?: MusicalExample[];
+}) {
+  const [mode, setMode] = useState<'exercise' | 'examples'>(
+    examples.length && !initialHidden ? 'examples' : 'exercise',
+  );
+  return (
+    <div className="exercise-workspace">
+      {examples.length > 0 && (
+        <div className="exercise-modes" role="group" aria-label="Режим упражнения">
+          <button
+            aria-pressed={mode === 'exercise'}
+            onClick={() => {
+              audioService.stopAll();
+              setMode('exercise');
+            }}
+          >
+            Разбор упражнения
+          </button>
+          <button
+            aria-pressed={mode === 'examples'}
+            onClick={() => {
+              audioService.stopAll();
+              setMode('examples');
+            }}
+          >
+            Музыкальные примеры · {examples.length}
+          </button>
+        </div>
+      )}
+      {mode === 'examples' && examples.length ? (
+        <MusicalExamplePlayer
+          examples={examples}
+          title={exercise.title}
+          instruction={exercise.instructions[0]}
+        />
+      ) : (
+        <ExerciseStudy exercise={exercise} initialHidden={initialHidden} />
+      )}
+    </div>
+  );
+}
+
+function ExerciseStudy({
   exercise,
   initialHidden = false,
 }: {
@@ -41,35 +77,24 @@ export function ExerciseViewer({
 }) {
   const [manual, setManual] = useState(0);
   const [hidden, setHidden] = useState(initialHidden);
-  const [details, setDetails] = useState(false);
-  const audio = useSyncExternalStore(audioService.subscribe, audioService.snapshot);
-  const { preferences, savePreferences } = useAppStore();
+  const state = useSyncExternalStore(audioService.subscribe, audioService.snapshot);
+  const audio =
+    state.planId === exercise.id
+      ? state
+      : {
+          ...state,
+          status: 'stopped',
+          index: 0,
+          notes: state.planId?.startsWith('note-') ? state.notes : [],
+        };
+  const preferences = useAppStore((store) => store.preferences);
   const prefs = preferences.audio;
   const [bpm, setBpm] = useState(
     prefs.bpmOverride ? prefs.bpm : (exercise.playback?.bpm ?? prefs.bpm),
   );
   const plan = useMemo(() => createPlaybackPlan(exercise, bpm), [exercise, bpm]);
   const v = exercise.visualization;
-  useEffect(() => {
-    audioService.configure({ ...prefs, bpm });
-  }, [prefs, bpm]);
   useEffect(() => () => audioService.stopAll(), []);
-  const changeBpm = (n: number) => {
-    const next = Math.max(40, Math.min(180, Math.round(n / 5) * 5));
-    setBpm(next);
-    audioService.configure({ ...prefs, bpm: next });
-    audioService.restart(next, prefs.loop);
-    if (audio.metronome) void audioService.startMetronome();
-    void savePreferences({ audio: { ...prefs, bpm: next, bpmOverride: true } });
-  };
-  const updatePrefs = (patch: Partial<typeof prefs>) => {
-    const value = { ...prefs, ...patch, bpm };
-    audioService.configure(value);
-    void savePreferences({ audio: value });
-    if (patch.loop !== undefined) audioService.restart(bpm, value.loop);
-    if ((patch.subdivision || patch.beatsPerBar) && audio.metronome)
-      void audioService.startMetronome();
-  };
   const labels: Record<number, string> = {};
   const names: Record<number, string> = {};
   if (v.type === 'scale')
@@ -204,199 +229,7 @@ export function ExerciseViewer({
           </div>
         </>
       )}
-      <div className="audio-controls">
-        <button
-          className="audio-play"
-          aria-label={audio.status === 'playing' ? 'Пауза воспроизведения' : 'Слушать упражнение'}
-          disabled={audio.status === 'loading'}
-          onClick={() =>
-            audio.status === 'playing'
-              ? audioService.pause()
-              : void audioService.play(plan, prefs.loop, true)
-          }
-        >
-          {audio.status === 'playing' ? (
-            <Pause size={23} />
-          ) : (
-            <Play size={23} fill="currentColor" />
-          )}
-        </button>
-        <div className="audio-title">
-          <strong>
-            {audio.status === 'loading'
-              ? 'Подключаем звук…'
-              : audio.status === 'playing'
-                ? 'Играет пример'
-                : audio.status === 'paused'
-                  ? 'Продолжить пример'
-                  : 'Послушать пример'}
-          </strong>
-          <span>
-            {audio.mode === 'piano' ? 'Пианино' : 'Синтезатор'} ·{' '}
-            {prefs.muted ? 'без звука' : 'с подсветкой нот'}
-          </span>
-        </div>
-        <IconButton
-          label="Остановить воспроизведение"
-          onClick={() => {
-            audioService.stop();
-            setManual(0);
-          }}
-        >
-          <Square size={18} />
-        </IconButton>
-        <IconButton
-          label="Повторять по кругу"
-          aria-pressed={prefs.loop}
-          className={prefs.loop ? 'is-active' : ''}
-          onClick={() => updatePrefs({ loop: !prefs.loop })}
-        >
-          <Repeat2 size={21} />
-        </IconButton>
-      </div>
-      <div className="audio-secondary">
-        <div className="bpm-control">
-          <IconButton
-            label="Уменьшить темп"
-            onClick={() => changeBpm(bpm - 5)}
-            disabled={bpm <= 40}
-          >
-            <Minus size={17} />
-          </IconButton>
-          <label>
-            <input
-              aria-label="Темп BPM"
-              type="number"
-              min={40}
-              max={180}
-              step={5}
-              value={bpm}
-              onChange={(e) => {
-                if (e.target.value) changeBpm(Number(e.target.value));
-              }}
-            />
-            <span>BPM</span>
-          </label>
-          <IconButton
-            label="Увеличить темп"
-            onClick={() => changeBpm(bpm + 5)}
-            disabled={bpm >= 180}
-          >
-            <Plus size={17} />
-          </IconButton>
-        </div>
-        <button
-          className="text-button small"
-          aria-expanded={details}
-          onClick={() => setDetails(!details)}
-        >
-          Звук и метроном
-        </button>
-      </div>
-      <div className="tempo-slider">
-        <span aria-hidden="true">40</span>
-        <input
-          aria-label="Темп воспроизведения, BPM"
-          aria-valuetext={`${bpm} ударов в минуту`}
-          type="range"
-          min={40}
-          max={180}
-          step={5}
-          value={bpm}
-          onChange={(e) => changeBpm(Number(e.target.value))}
-        />
-        <span aria-hidden="true">180</span>
-      </div>
-      {(prefs.muted || prefs.volume === 0) && (
-        <div className="audio-muted-notice" role="status">
-          <span>
-            <VolumeX size={17} /> {prefs.muted ? 'Звук выключен' : 'Громкость на нуле'}
-          </span>
-          <button
-            className="text-button small"
-            onClick={() =>
-              updatePrefs({ muted: false, volume: prefs.volume || defaultPreferences.audio.volume })
-            }
-          >
-            Вернуть звук
-          </button>
-        </div>
-      )}
-      {details && (
-        <div className="audio-settings">
-          <div className="volume-row">
-            <IconButton
-              label={prefs.muted ? 'Включить звук' : 'Выключить звук'}
-              aria-pressed={prefs.muted}
-              onClick={() => updatePrefs({ muted: !prefs.muted })}
-            >
-              {prefs.muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-            </IconButton>
-            <input
-              aria-label="Громкость"
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={prefs.volume}
-              onChange={(e) => updatePrefs({ volume: Number(e.target.value) })}
-            />
-            <span>{Math.round(prefs.volume * 100)}%</span>
-          </div>
-          <div className="metronome-row">
-            <button
-              className={`button secondary small ${audio.metronome ? 'is-active' : ''}`}
-              aria-pressed={audio.metronome}
-              onClick={() =>
-                audio.metronome ? audioService.stopMetronome() : void audioService.startMetronome()
-              }
-            >
-              {audio.metronome ? <Pause size={16} /> : <Play size={16} />}Метроном
-            </button>
-            <div className="beat-dots" aria-label={`Доля ${audio.beat + 1}`}>
-              {Array.from({ length: prefs.beatsPerBar }, (_, i) => (
-                <span key={i} className={audio.metronome && audio.beat === i ? 'lit' : ''}>
-                  {i + 1}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="field-pair">
-            <label>
-              Деление
-              <select
-                value={prefs.subdivision}
-                onChange={(e) =>
-                  updatePrefs({ subdivision: Number(e.target.value) as 1 | 2 | 3 | 4 })
-                }
-              >
-                <option value={1}>Четверти</option>
-                <option value={2}>Восьмые</option>
-                <option value={3}>Триоли</option>
-                <option value={4}>Шестнадцатые</option>
-              </select>
-            </label>
-            <label>
-              Размер
-              <select
-                value={prefs.beatsPerBar}
-                onChange={(e) => updatePrefs({ beatsPerBar: Number(e.target.value) })}
-              >
-                <option value={3}>3/4</option>
-                <option value={4}>4/4</option>
-                <option value={6}>6/4</option>
-              </select>
-            </label>
-          </div>
-          <p className="hint">Метроном и таймер запускаются отдельно. Первая доля — с акцентом.</p>
-          <p className="hint">
-            Если на iPhone не слышно звук, прибавь громкость во время проигрывания и проверь, куда
-            выводится звук — на динамик или Bluetooth. В старых версиях iOS может понадобиться
-            выключить беззвучный режим.
-          </p>
-        </div>
-      )}
-      {audio.error && <ErrorMessage>{audio.error}</ErrorMessage>}
+      <AudioControls plan={plan} bpm={bpm} onBpmChange={setBpm} onStop={() => setManual(0)} />
       <details className="practice-notes">
         <summary>На что обратить внимание</summary>
         {exercise.instructions.slice(1).map((text, i) => (

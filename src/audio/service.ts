@@ -1,7 +1,15 @@
 import * as Tone from 'tone';
 import type { AudioPreferences, PlaybackPlan } from '../core/types';
 import { defaultPreferences } from '../core/types';
-import { CancellationToken, scheduleNotes, type ScheduledNote } from './scheduler';
+import {
+  CancellationToken,
+  frameAtBeat,
+  heldNotesAtBeat,
+  playbackFrames,
+  scheduleNotes,
+  type PlaybackFrame,
+  type ScheduledNote,
+} from './scheduler';
 import { startPlaybackContext } from './playback-context';
 
 export const PIANO_FILES = ['C2', 'Fs2', 'C3', 'Fs3', 'C4', 'Fs4', 'C5', 'Fs5', 'C6'] as const;
@@ -9,19 +17,30 @@ type AudioState = {
   status: 'stopped' | 'loading' | 'playing' | 'paused';
   notes: number[];
   index: number;
+  positionBeat: number;
+  planId: string | null;
+  leftNotes: number[];
+  rightNotes: number[];
+  eventIndexes: number[];
   metronome: boolean;
   beat: number;
   mode: 'piano' | 'synth';
   error: string | null;
 };
-class AudioService {
+export class AudioService {
   private sampler?: Tone.Sampler;
   private synth?: Tone.PolySynth;
+  private leftSampler?: Tone.Sampler;
+  private leftSynth?: Tone.PolySynth;
   private click?: Tone.Synth;
   private master?: Tone.Gain;
   private pianoGate?: Tone.Gain;
   private metroGate?: Tone.Gain;
   private part?: Tone.Part<ScheduledNote>;
+  private visualPart?: Tone.Part<PlaybackFrame & { time: number }>;
+  private startedAt = 0;
+  private offsetBeat = 0;
+  private looping = false;
   private metro?: Tone.Clock;
   private initialized = false;
   private operation = 0;
@@ -33,6 +52,11 @@ class AudioService {
     status: 'stopped',
     notes: [],
     index: 0,
+    positionBeat: 0,
+    planId: null,
+    leftNotes: [],
+    rightNotes: [],
+    eventIndexes: [],
     metronome: false,
     beat: 0,
     mode: 'synth',
@@ -98,51 +122,118 @@ class AudioService {
     this.token.cancel();
     this.part?.dispose();
     this.part = undefined;
+    this.visualPart?.dispose();
+    this.visualPart = undefined;
     this.sampler?.releaseAll(Tone.immediate());
     this.synth?.releaseAll(Tone.immediate());
+    this.leftSampler?.releaseAll(Tone.immediate());
+    this.leftSynth?.releaseAll(Tone.immediate());
     if (this.pianoGate) {
       this.pianoGate.gain.cancelScheduledValues(0);
       this.pianoGate.gain.setValueAtTime(0, Tone.immediate());
     }
   }
+  private ensureLeftHand() {
+    if (this.leftSynth) return;
+    this.leftSynth = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'triangle' },
+      envelope: { attack: 0.005, decay: 0.7, sustain: 0.15, release: 0.3 },
+      volume: -12,
+    }).connect(this.pianoGate!);
+    // Independent voices prevent a melody release from cutting off the same pitch in a chord.
+    this.leftSampler = new Tone.Sampler({
+      urls: Object.fromEntries(PIANO_FILES.map((note) => [note.replace('s', '#'), `${note}.mp3`])),
+      baseUrl: `${import.meta.env.BASE_URL}audio/piano/`,
+      release: 0.45,
+      onerror: () => {},
+    }).connect(this.pianoGate!);
+  }
+  private trigger(event: ScheduledNote, time: number, duration = event.duration) {
+    const sampler = event.hand === 'left' ? this.leftSampler : this.sampler;
+    const synth = event.hand === 'left' ? this.leftSynth : this.synth;
+    const instrument = sampler?.loaded ? sampler : synth!;
+    instrument.triggerAttackRelease(
+      event.notes.map((note) => Tone.Frequency(note, 'midi').toNote()),
+      duration,
+      time,
+      event.velocity ?? 0.75,
+    );
+  }
+  private position() {
+    if (!this.plan || this.state.status !== 'playing') return this.state.positionBeat;
+    const beat =
+      (Math.max(0, Tone.getTransport().seconds - this.startedAt) * this.plan.bpm) / 60 +
+      this.offsetBeat;
+    return this.looping ? beat % this.plan.lengthBeats : Math.min(beat, this.plan.lengthBeats);
+  }
+  private showFrame(frame: PlaybackFrame) {
+    this.update({
+      positionBeat: frame.beat,
+      index: frame.index,
+      notes: frame.notes,
+      leftNotes: frame.leftNotes,
+      rightNotes: frame.rightNotes,
+      eventIndexes: frame.eventIndexes,
+    });
+  }
   async play(plan: PlaybackPlan, loop: boolean, resume = false) {
-    const from = resume && this.state.status === 'paused' ? this.state.index : 0;
+    const from =
+      resume && this.state.status === 'paused' && this.state.planId === (plan.id ?? null)
+        ? this.state.positionBeat
+        : 0;
     this.clearPart();
     const op = ++this.operation;
     this.plan = plan;
-    this.update({ status: 'loading', error: null, notes: [] });
+    this.update({
+      status: 'loading',
+      error: null,
+      notes: [],
+      leftNotes: [],
+      rightNotes: [],
+      eventIndexes: [],
+      planId: plan.id ?? null,
+      positionBeat: from,
+    });
     try {
       await this.unlock();
       if (op !== this.operation) return;
+      if (plan.events.some((event) => event.hand === 'left')) this.ensureLeftHand();
       const transport = this.ensureTransport();
       const schedule = scheduleNotes(plan);
-      const transportStart = transport.seconds + 0.15;
-      this.pianoGate!.gain.setValueAtTime(1, Tone.now() + 0.15);
+      const audioStart = Tone.now() + 0.15;
+      const transportStart = transport.getSecondsAtTime(audioStart);
+      this.startedAt = transportStart;
+      this.offsetBeat = from;
+      this.looping = loop;
+      this.pianoGate!.gain.setValueAtTime(1, audioStart);
       this.part = new Tone.Part<ScheduledNote>((time, event) => {
-        if (event.index === -1) {
-          Tone.getDraw().schedule(
-            this.token.guard(() => this.stop()),
-            time,
-          );
-          return;
-        }
-        const notes = event.notes.map((n) => Tone.Frequency(n, 'midi').toNote());
-        const instrument = this.sampler?.loaded ? this.sampler : this.synth!;
-        instrument.triggerAttackRelease(notes, event.duration * 0.88, time, 0.75);
-        Tone.getDraw().schedule(
-          this.token.guard(() => this.update({ notes: event.notes, index: event.index })),
-          time,
-        );
-        Tone.getDraw().schedule(
-          this.token.guard(() => this.update({ notes: [] })),
-          time + event.duration * 0.85,
-        );
+        this.trigger(event, time, event.duration * (plan.legato ? 1 : 0.88));
       }, schedule.events);
       this.part.loop = loop;
       this.part.loopEnd = schedule.length;
-      if (!loop) this.part.add({ time: schedule.length, notes: [], duration: 0, index: -1 });
-      this.part.start(transportStart, ((plan.events[from]?.beat ?? 0) * 60) / plan.bpm);
-      this.update({ status: 'playing', index: from });
+      const frames = playbackFrames(plan).filter((frame) => !loop || frame.beat < plan.lengthBeats);
+      this.visualPart = new Tone.Part<PlaybackFrame & { time: number }>(
+        (time, frame) => {
+          Tone.getDraw().schedule(
+            this.token.guard(() => {
+              if (!loop && frame.beat >= plan.lengthBeats) this.stop();
+              else this.showFrame(frame);
+            }),
+            time,
+          );
+        },
+        frames.map((frame) => ({ ...frame, time: (frame.beat * 60) / plan.bpm })),
+      );
+      this.visualPart.loop = loop;
+      this.visualPart.loopEnd = schedule.length;
+      this.part.start(transportStart, (from * 60) / plan.bpm);
+      this.visualPart.start(transportStart, (from * 60) / plan.bpm);
+      for (const held of heldNotesAtBeat(plan, from)) this.trigger(held, audioStart);
+      Tone.getDraw().schedule(
+        this.token.guard(() => this.showFrame(frameAtBeat(plan, from))),
+        audioStart,
+      );
+      this.update({ status: 'playing' });
     } catch (error) {
       if (op === this.operation) {
         this.clearPart();
@@ -154,14 +245,30 @@ class AudioService {
     }
   }
   pause() {
+    const positionBeat = this.position();
     ++this.operation;
     this.clearPart();
-    this.update({ status: 'paused', notes: [] });
+    this.update({
+      status: 'paused',
+      notes: [],
+      leftNotes: [],
+      rightNotes: [],
+      eventIndexes: [],
+      positionBeat,
+    });
   }
   stop() {
     ++this.operation;
     this.clearPart();
-    this.update({ status: 'stopped', notes: [], index: 0 });
+    this.update({
+      status: 'stopped',
+      notes: [],
+      leftNotes: [],
+      rightNotes: [],
+      eventIndexes: [],
+      index: 0,
+      positionBeat: 0,
+    });
   }
   restart(bpm: number, loop: boolean) {
     if (this.plan && this.state.status === 'playing') void this.play({ ...this.plan, bpm }, loop);
@@ -169,7 +276,12 @@ class AudioService {
   }
   async note(midi: number) {
     await this.play(
-      { bpm: 80, events: [{ notes: [midi], beat: 0, durationBeats: 1 }], lengthBeats: 1 },
+      {
+        id: `note-${midi}`,
+        bpm: 80,
+        events: [{ notes: [midi], beat: 0, durationBeats: 1 }],
+        lengthBeats: 1,
+      },
       false,
     );
   }
@@ -229,6 +341,10 @@ class AudioService {
     this.stopAll();
     this.sampler?.dispose();
     this.synth?.dispose();
+    this.leftSampler?.dispose();
+    this.leftSynth?.dispose();
+    this.leftSampler = undefined;
+    this.leftSynth = undefined;
     this.click?.dispose();
     this.pianoGate?.dispose();
     this.metroGate?.dispose();
