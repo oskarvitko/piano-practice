@@ -2,6 +2,7 @@ import * as Tone from 'tone';
 import type { AudioPreferences, PlaybackPlan } from '../core/types';
 import { defaultPreferences } from '../core/types';
 import { CancellationToken, scheduleNotes, type ScheduledNote } from './scheduler';
+import { startPlaybackContext } from './playback-context';
 
 export const PIANO_FILES = ['C2', 'Fs2', 'C3', 'Fs3', 'C4', 'Fs4', 'C5', 'Fs5', 'C6'] as const;
 type AudioState = {
@@ -51,7 +52,7 @@ class AudioService {
   }
   async unlock() {
     // Tone.start() is called synchronously within the user's click, before any fetch/await.
-    const unlock = Tone.start();
+    const unlock = startPlaybackContext(() => Tone.start());
     await unlock;
     if (Tone.getContext().state !== 'running')
       throw new Error('Звук недоступен. Нажми Play ещё раз и проверь беззвучный режим.');

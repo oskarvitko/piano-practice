@@ -16,7 +16,7 @@ import {
   Plus,
   Music2,
 } from 'lucide-react';
-import type { Exercise } from '../core/types';
+import { defaultPreferences, type Exercise } from '../core/types';
 import {
   createPlaybackPlan,
   degreeLabel,
@@ -307,6 +307,21 @@ export function ExerciseViewer({
         />
         <span aria-hidden="true">180</span>
       </div>
+      {(prefs.muted || prefs.volume === 0) && (
+        <div className="audio-muted-notice" role="status">
+          <span>
+            <VolumeX size={17} /> {prefs.muted ? 'Звук выключен' : 'Громкость на нуле'}
+          </span>
+          <button
+            className="text-button small"
+            onClick={() =>
+              updatePrefs({ muted: false, volume: prefs.volume || defaultPreferences.audio.volume })
+            }
+          >
+            Вернуть звук
+          </button>
+        </div>
+      )}
       {details && (
         <div className="audio-settings">
           <div className="volume-row">
@@ -374,6 +389,11 @@ export function ExerciseViewer({
             </label>
           </div>
           <p className="hint">Метроном и таймер запускаются отдельно. Первая доля — с акцентом.</p>
+          <p className="hint">
+            Если на iPhone не слышно звук, прибавь громкость во время проигрывания и проверь, куда
+            выводится звук — на динамик или Bluetooth. В старых версиях iOS может понадобиться
+            выключить беззвучный режим.
+          </p>
         </div>
       )}
       {audio.error && <ErrorMessage>{audio.error}</ErrorMessage>}

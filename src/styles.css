@@ -1076,6 +1076,24 @@ main:focus {
   accent-color: var(--accent);
   cursor: pointer;
 }
+.audio-muted-notice {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  font-size: 0.8125rem;
+}
+.audio-muted-notice > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 #keyboard {
   scroll-margin-top: 85px;
 }
