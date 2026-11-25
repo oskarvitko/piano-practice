@@ -51,7 +51,19 @@ npm run build
 
 ## GitHub Pages
 
-Подготовлен `.github/workflows/deploy.yml`: `npm ci` → typecheck → lint → tests → build → Pages artifact → deploy. В GitHub выбери **Settings → Pages → Source: GitHub Actions**; workflow срабатывает при push в `main`/`master` или ручном запуске. Базовый путь настроен на `/piano-practice/`, manifest использует относительные `start_url` и `scope`. Публикация из этой рабочей сессии не выполнялась.
+Workflow `.github/workflows/deploy.yml`: `npm ci` → typecheck → lint → tests → build → Pages artifact → deploy → проверка опубликованных JS/CSS. Он срабатывает при push в `main`/`master` или ручном запуске.
+
+Настройки репозитория для публикации:
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions**. Режим «Deploy from a branch» опубликует исходный `index.html` с TypeScript вместо сборки и приведёт к пустому экрану.
+2. **Settings → Environments → github-pages → Deployment branches and tags**: разрешить используемую ветку `master` (либо `main`, если публикация идёт из неё). Остальные правила защиты окружения сохраняются.
+3. В **Actions → Deploy Piano Practice** запустить workflow для нужной ветки. Успешными должны быть оба задания: `build` и `deploy`, включая проверку опубликованных файлов.
+
+Базовый путь настроен на `/piano-practice/`, manifest использует относительные `start_url` и `scope`. Публикуется только `dist/`. Проверить конкретный сайт вручную можно командой:
+
+```sh
+node scripts/verify-deployment.mjs https://oskarvitko.github.io/piano-practice/
+```
 
 ## Лицензия звука
 
