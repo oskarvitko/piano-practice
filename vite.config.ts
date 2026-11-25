@@ -9,7 +9,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['icons/*.png', 'audio/piano/*'],
+      includeAssets: ['icons/*.png', 'audio/piano/*', 'audio/voice/**/*'],
       manifest: {
         name: 'Piano Practice — твоя ежедневная практика',
         short_name: 'Piano Practice',
@@ -18,7 +18,7 @@ export default defineConfig({
         start_url: './',
         scope: './',
         display: 'standalone',
-        orientation: 'portrait-primary',
+        orientation: 'any',
         theme_color: '#101827',
         background_color: '#101827',
         icons: [
@@ -33,7 +33,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,mp3,txt}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,mp3,wav,txt,json}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,

@@ -1,8 +1,10 @@
 # Piano Practice
 
-Офлайн-тренажёр для самостоятельных занятий за пианино: 16 недель, 48 уроков, 3 × 40 минут в неделю. Интерфейс на русском. Сервер, регистрация и MIDI не нужны.
+Офлайн-тренажёр для самостоятельных занятий за пианино. **Learning**: 16 недель, 48 уроков, 3 × 40 минут в неделю. **Practice**: независимые Degree, Chord, Style, Fill & Run и Scale & Pattern тренажёры. Интерфейс на русском. Сервер, регистрация и MIDI не нужны.
 
 Проект находится **в корне `D:\petproject\piano-practice`**. Папка `piano-practice-codex-blue` содержит только исходное ТЗ и макеты.
+
+Practice включает 36 типов аккордов, 95 гармонических прогрессий, все 12 тональностей, адаптацию к сложным заданиям, подсказки с воспроизведением, отдельные аудиоканалы и локальные голоса EN/PL. Настройки, сессии и история сохраняются отдельно от Learning. Архитектура, музыкальные соглашения, офлайн-ресурсы и команды проверки — в [docs/PRACTICE.md](docs/PRACTICE.md).
 
 ## Запуск
 
@@ -20,7 +22,7 @@ npm run build
 npm run preview
 ```
 
-В development service worker отключён. В production он кэширует приложение, определения всех уроков, иконки и девять локальных MP3. Надпись «Готово к занятиям офлайн» появляется только после проверки наличия всех сэмплов в Cache Storage. Первый запуск требует подключения. На iPhone установка и service worker требуют HTTPS; обычный LAN URL по HTTP подходит только для визуального просмотра.
+В development service worker отключён. В production он кэширует приложение, определения всех уроков, иконки, девять локальных MP3 и 18 голосовых WAV EN/PL. Надпись «Готово к занятиям офлайн» появляется только после проверки наличия пианино и голосовых файлов в Cache Storage. Первый запуск требует подключения. На iPhone установка и service worker требуют HTTPS; обычный LAN URL по HTTP подходит только для визуального просмотра.
 
 ## Что работает
 
@@ -60,7 +62,7 @@ npm run build
 
 ## GitHub Pages
 
-Workflow `.github/workflows/deploy.yml`: `npm ci` → typecheck → lint → tests → build → Pages artifact → deploy → проверка опубликованных JS/CSS. Он срабатывает при push в `main`/`master` или ручном запуске.
+Workflow `.github/workflows/deploy.yml`: `npm ci` → typecheck → lint → tests → build → проверка WAV → E2E Chromium/WebKit → Pages artifact → deploy → проверка опубликованных JS/CSS. Он срабатывает при push в `main`/`master` или ручном запуске.
 
 Настройки репозитория для публикации:
 
@@ -75,6 +77,8 @@ node scripts/verify-deployment.mjs https://oskarvitko.github.io/piano-practice/
 ```
 
 ## Лицензия звука
+
+Голосовые подсказки: 18 локальных WAV, сгенерированных заранее с CC0-моделями Piper. Источники, лицензии и измерения — в `public/audio/voice/LICENSE.txt` и `manifest.json`; воспроизведение не обращается к TTS-сервисам.
 
 Salamander Grand Piano, **Alexander Holm**, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Девять MP3 взяты без изменений из [Tone.js Audio](https://github.com/Tonejs/audio/tree/master/salamander); высота изменяется при воспроизведении. Атрибуция, исходный README и локальные файлы находятся в `public/audio/piano/`. В приложении лицензия доступна в настройках.
 

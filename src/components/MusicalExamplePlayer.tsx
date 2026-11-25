@@ -15,10 +15,12 @@ export function MusicalExamplePlayer({
   examples,
   title,
   instruction,
+  practice = false,
 }: {
   examples: MusicalExample[];
   title?: string;
   instruction?: string;
+  practice?: boolean;
 }) {
   const [selected, setSelected] = useState(0);
   const [root, setRoot] = useState(examples[0]?.root ?? 60);
@@ -42,6 +44,7 @@ export function MusicalExamplePlayer({
             onChange={(event) => {
               audioService.stopAll();
               setSelected(Number(event.target.value));
+              if (practice) setRoot(examples[Number(event.target.value)].root);
             }}
           >
             {examples.map((item, index) => (
@@ -51,33 +54,36 @@ export function MusicalExamplePlayer({
             ))}
           </select>
         </label>
-        <label>
-          Тональность
-          <select
-            value={pitchClass(root)}
-            onChange={(event) => {
-              audioService.stopAll();
-              const pc = Number(event.target.value);
-              setRoot(original.root + ((pc - pitchClass(original.root) + 18) % 12) - 6);
-            }}
-          >
-            {Array.from({ length: 12 }, (_, pc) => (
-              <option value={pc} key={pc}>
-                {getNoteName(60 + pc, 60 + pc)} major
-              </option>
-            ))}
-          </select>
-        </label>
+        {!practice && (
+          <label>
+            Тональность
+            <select
+              value={pitchClass(root)}
+              onChange={(event) => {
+                audioService.stopAll();
+                const pc = Number(event.target.value);
+                setRoot(original.root + ((pc - pitchClass(original.root) + 18) % 12) - 6);
+              }}
+            >
+              {Array.from({ length: 12 }, (_, pc) => (
+                <option value={pc} key={pc}>
+                  {getNoteName(60 + pc, 60 + pc)}
+                  {practice ? '' : ' major'}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
-      <ExamplePhrase key={`${example.id}-${root}`} example={example} />
+      <ExamplePhrase key={`${example.id}-${root}`} example={example} practice={practice} />
     </section>
   );
 }
 
-function ExamplePhrase({ example }: { example: MusicalExample }) {
+function ExamplePhrase({ example, practice }: { example: MusicalExample; practice: boolean }) {
   const preferences = useAppStore((store) => store.preferences);
   const [bpm, setBpm] = useState(
-    preferences.audio.bpmOverride ? preferences.audio.bpm : example.bpm,
+    !practice && preferences.audio.bpmOverride ? preferences.audio.bpm : example.bpm,
   );
   const [manual, setManual] = useState(0);
   const plan = useMemo(() => examplePlaybackPlan(example, bpm), [example, bpm]);
@@ -109,7 +115,7 @@ function ExamplePhrase({ example }: { example: MusicalExample }) {
   const seekBeat = (at: number) => seek(positions.indexOf(at));
   const melody = example.events
     .map((event, index) => ({ ...event, index }))
-    .filter((event) => event.hand === 'right');
+    .filter((event) => event.hand === 'right' || (practice && event.role === 'melody'));
   const names: Record<number, string> = {};
   const labels: Record<number, string> = {};
   for (const event of melody)
@@ -131,8 +137,9 @@ function ExamplePhrase({ example }: { example: MusicalExample }) {
         <h4>{example.title}</h4>
         <p>{example.description}</p>
         <span>
-          {example.beatsPerBar}/4 · {example.lengthBeats / example.beatsPerBar} такта ·
-          рекомендуется {example.bpm} BPM
+          {example.meter ?? `${example.beatsPerBar}/4`} ·{' '}
+          {Number((example.lengthBeats / example.beatsPerBar).toFixed(2))} такта · рекомендуется{' '}
+          {example.bpm} BPM
         </span>
       </div>
       <div className="example-progression" role="group" aria-label="Аккордовая прогрессия">
@@ -179,7 +186,14 @@ function ExamplePhrase({ example }: { example: MusicalExample }) {
         <span style={{ width: `${(beat / example.lengthBeats) * 100}%` }} />
       </div>
       <div className="melody-heading">
-        <strong>Правая рука · мелодия</strong>
+        <strong>
+          {melody.some((e) => e.hand === 'left')
+            ? melody.some((e) => e.hand === 'right')
+              ? 'Две руки'
+              : 'Левая рука'
+            : 'Правая рука'}{' '}
+          · {melody.some((e) => e.role === 'melody') ? 'мелодия' : 'аккорды'}
+        </strong>
         <span>Нота · ступень · длительность</span>
       </div>
       <div className="example-melody" aria-label="Ноты и ритм мелодии">
@@ -193,7 +207,7 @@ function ExamplePhrase({ example }: { example: MusicalExample }) {
               className={`${frame.eventIndexes.includes(event.index) ? 'current-note' : ''} ${isTarget ? 'target-event' : ''}`}
               aria-pressed={frame.eventIndexes.includes(event.index)}
               onClick={() => seekBeat(event.startBeat)}
-              aria-label={`${event.notes.map((note) => names[note] ?? getNoteName(note, example.root, true)).join(', ')}, ${rhythmLabel(event.durationBeats)}${isTarget ? ', целевая нота' : ''}`}
+              aria-label={`${event.notes.map((note) => names[note] ?? getNoteName(note, example.root, true)).join(', ')}, ${rhythmLabel(event.durationBeats * (example.meter === '6/8' ? 1.5 : 1))}${isTarget ? ', целевая нота' : ''}`}
             >
               <strong>
                 {isTarget && <span aria-hidden="true">◇ </span>}
@@ -206,22 +220,29 @@ function ExamplePhrase({ example }: { example: MusicalExample }) {
                   .join(' · ')}
               </strong>
               <small>
-                {event.degrees?.map(degreeLabel).join(' · ')} · {rhythmLabel(event.durationBeats)}
+                {event.degrees?.map(degreeLabel).join(' · ')} ·{' '}
+                {rhythmLabel(event.durationBeats * (example.meter === '6/8' ? 1.5 : 1))}
               </small>
             </button>
           );
         })}
       </div>
-      <p className="left-hand-line">
-        <strong>Левая рука:</strong>{' '}
-        {example.progression
-          .map(
-            (chord) =>
-              `${chord.name} (${chord.notes.map((note) => getNoteName(note, example.root, true)).join('–')})`,
-          )
-          .join(' → ')}
-        . Держи каждый аккорд {example.beatsPerBar} доли.
-      </p>
+      {example.events.some((event) => event.hand === 'left' && event.role !== 'melody') && (
+        <p className="left-hand-line">
+          <strong>Левая рука:</strong>{' '}
+          {example.progression
+            .map(
+              (chord) =>
+                `${chord.name} (${example.events
+                  .filter((event) => event.hand === 'left' && event.startBeat === chord.startBeat)
+                  .flatMap((event) => event.notes)
+                  .map((note) => getNoteName(note, example.root, true))
+                  .join('–')})`,
+            )
+            .join(' → ')}
+          . Держи каждый аккорд {example.beatsPerBar} доли.
+        </p>
+      )}
       <PianoKeyboard
         notes={allNotes}
         active={frame.notes}
@@ -277,6 +298,7 @@ function ExamplePhrase({ example }: { example: MusicalExample }) {
         onBpmChange={setBpm}
         onStop={() => setManual(0)}
         recommendedBpm={example.bpm}
+        practice={practice}
       />
       <details className="practice-notes example-method">
         <summary>Как разучивать пример</summary>

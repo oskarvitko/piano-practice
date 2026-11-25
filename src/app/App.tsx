@@ -11,6 +11,9 @@ import { getNextLesson } from '../core/lesson-engine';
 import { audioService } from '../audio/service';
 import { OfflineStatus } from '../features/offline/OfflineStatus';
 import { NotificationToast } from '../components/NotificationToast';
+import { PracticeHome, PracticeHistory } from '../features/practice/Home';
+import { PracticeConfiguration } from '../features/practice/Configuration';
+import { PracticeSessionScreen } from '../features/practice/Session';
 class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
@@ -85,7 +88,9 @@ function Shell() {
     (l) => l.programId === active && l.status === 'completed',
   ).length;
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell ${location.pathname === '/practice/session' ? 'practice-active' : ''}`}
+    >
       <NotificationToast />
       <a
         href="#main-content"
@@ -105,7 +110,11 @@ function Shell() {
         <nav className="main-nav" aria-label="Основная навигация">
           <NavLink to="/" end>
             <House size={20} />
-            Моя практика
+            Learning · обучение
+          </NavLink>
+          <NavLink to="/practice">
+            <Sparkles size={20} />
+            Practice · тренажёры
           </NavLink>
           <NavLink
             to={active ? `/program/${active}` : '/programs'}
@@ -158,17 +167,35 @@ function Shell() {
           <span>
             Личная студия <ChevronRight size={14} />
             <strong>
-              {location.pathname.startsWith('/lesson/')
-                ? 'Практика'
-                : location.pathname === '/settings'
-                  ? 'Настройки'
-                  : location.pathname.startsWith('/program/')
-                    ? 'План программы'
-                    : 'Программы'}
+              {location.pathname.startsWith('/practice')
+                ? 'Practice'
+                : location.pathname.startsWith('/lesson/')
+                  ? 'Практика'
+                  : location.pathname === '/settings'
+                    ? 'Настройки'
+                    : location.pathname.startsWith('/program/')
+                      ? 'План программы'
+                      : 'Программы'}
             </strong>
           </span>
           <span className="quiet-label">Твой ритм. Твой прогресс.</span>
         </div>
+        <nav className="mode-switch" aria-label="Режим приложения">
+          <Link
+            to="/"
+            aria-current={!location.pathname.startsWith('/practice') ? 'page' : undefined}
+          >
+            <BookOpen size={16} />
+            Learning
+          </Link>
+          <Link
+            to="/practice"
+            aria-current={location.pathname.startsWith('/practice') ? 'page' : undefined}
+          >
+            <Sparkles size={16} />
+            Practice
+          </Link>
+        </nav>
         <main id="main-content" tabIndex={-1}>
           {!ready ? (
             <Loading />
@@ -187,6 +214,10 @@ function Shell() {
               <Route path="/lesson/:programId/:lessonId" element={<LessonPage />} />
               <Route path="/lesson/:programId/:lessonId/completed" element={<CompletedPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/practice" element={<PracticeHome />} />
+              <Route path="/practice/history" element={<PracticeHistory />} />
+              <Route path="/practice/session" element={<PracticeSessionScreen />} />
+              <Route path="/practice/:trainer" element={<PracticeConfiguration />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )}

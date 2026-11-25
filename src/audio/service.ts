@@ -11,6 +11,8 @@ import {
   type ScheduledNote,
 } from './scheduler';
 import { startPlaybackContext } from './playback-context';
+import type { Channel, Channels } from '../core/practice/types';
+import type { PracticeSound } from './practice-scheduler';
 
 export const PIANO_FILES = ['C2', 'Fs2', 'C3', 'Fs3', 'C4', 'Fs4', 'C5', 'Fs5', 'C6'] as const;
 type AudioState = {
@@ -28,6 +30,23 @@ type AudioState = {
   error: string | null;
 };
 export class AudioService {
+  private practiceRepeat?: number;
+  private practiceClickSynth?: Tone.Synth;
+  private practiceBuses?: Record<Channel, Tone.Gain>;
+  private practiceVoices: Partial<
+    Record<Channel, { sampler: Tone.Sampler; synth: Tone.PolySynth }>
+  > = {};
+  private voiceBuffers = new Map<string, Tone.ToneAudioBuffer>();
+  private speechSources = new Set<Tone.ToneBufferSource>();
+  private voiceBusyUntil = 0;
+  private practiceGeneration = 0;
+  private interruptions = new Set<() => void>();
+  onInterruption(fn: () => void) {
+    this.interruptions.add(fn);
+    return () => {
+      this.interruptions.delete(fn);
+    };
+  }
   private sampler?: Tone.Sampler;
   private synth?: Tone.PolySynth;
   private leftSampler?: Tone.Sampler;
@@ -75,6 +94,10 @@ export class AudioService {
     this.listeners.forEach((fn) => fn());
   }
   async unlock() {
+    if (typeof window !== 'undefined' && typeof window.AudioContext !== 'function')
+      throw new Error(
+        'Этот браузер не поддерживает Web Audio. Открой приложение в Safari, Chrome или Edge.',
+      );
     // Tone.start() is called synchronously within the user's click, before any fetch/await.
     const unlock = startPlaybackContext(() => Tone.start());
     await unlock;
@@ -332,10 +355,165 @@ export class AudioService {
     this.update({ metronome: false, beat: 0 });
   }
   stopAll() {
+    const wasPractice = this.practiceRepeat !== undefined;
+    this.stopPractice();
     this.stop();
     this.stopMetronome();
-    Tone.getTransport().stop();
-    Tone.getDraw().cancel();
+    if (this.initialized) {
+      Tone.getTransport().stop();
+      Tone.getDraw().cancel();
+    }
+    if (wasPractice) this.interruptions.forEach((fn) => fn());
+  }
+  private ensurePracticeBuses() {
+    if (this.practiceBuses) return;
+    this.practiceBuses = Object.fromEntries(
+      ['metronome', 'bass', 'harmony', 'melody', 'voice'].map((channel) => [
+        channel,
+        new Tone.Gain(0).connect(this.master!),
+      ]),
+    ) as Record<Channel, Tone.Gain>;
+    this.practiceClickSynth = new Tone.Synth({
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.001, decay: 0.025, sustain: 0, release: 0.01 },
+      volume: -14,
+    }).connect(this.practiceBuses.metronome);
+    for (const channel of ['bass', 'harmony', 'melody'] as const) {
+      const synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 0.005, decay: 0.5, sustain: 0.2, release: 0.15 },
+        volume: -12,
+      }).connect(this.practiceBuses[channel]);
+      const sampler = new Tone.Sampler({
+        urls: Object.fromEntries(
+          PIANO_FILES.map((note) => [note.replace('s', '#'), `${note}.mp3`]),
+        ),
+        baseUrl: `${import.meta.env.BASE_URL}audio/piano/`,
+        release: 0.25,
+        onerror: () => {},
+      }).connect(this.practiceBuses[channel]);
+      this.practiceVoices[channel] = { sampler, synth };
+    }
+  }
+  async prepareVoice(language: 'en' | 'pl') {
+    const errors: string[] = [];
+    await Promise.all(
+      ['1', '2', '3', '4', '5', '6', '7', 'flat', 'sharp'].map(async (word) => {
+        const key = `${language}/${word}`;
+        if (this.voiceBuffers.has(key)) return;
+        try {
+          const buffer = new Tone.ToneAudioBuffer();
+          await buffer.load(`${import.meta.env.BASE_URL}audio/voice/${key}.wav`);
+          this.voiceBuffers.set(key, buffer);
+        } catch {
+          errors.push(word);
+        }
+      }),
+    );
+    if (errors.length)
+      throw new Error(
+        'Голос ещё не загружен. Подключись к интернету и загрузи офлайн-ресурсы в настройках.',
+      );
+  }
+  async beginPractice(
+    bpm: number,
+    channels: Channels,
+    pulse: (time: number) => void,
+    compound = false,
+  ) {
+    this.stopAll();
+    const generation = ++this.practiceGeneration;
+    await this.unlock();
+    if (generation !== this.practiceGeneration) return;
+    this.ensurePracticeBuses();
+    this.configurePracticeChannels(channels);
+    const transport = Tone.getTransport();
+    transport.bpm.value = bpm * (compound ? 1.5 : 1);
+    this.practiceRepeat = transport.scheduleRepeat(
+      (time) => {
+        if (generation === this.practiceGeneration) pulse(time);
+      },
+      '32t',
+      0,
+    );
+    transport.start(Tone.now() + 0.15);
+    this.update({ status: 'playing', planId: 'practice-stream', error: null });
+  }
+  configurePracticeChannels(channels: Channels) {
+    for (const channel of Object.keys(channels) as Channel[])
+      this.practiceBuses?.[channel].gain.rampTo(
+        channels[channel].enabled ? channels[channel].volume : 0,
+        0.015,
+      );
+    // Learning's global mute does not silently disable independent Practice channels.
+    this.master?.gain.rampTo(0.85, 0.015);
+  }
+  practiceTempo(bpm: number, compound = false) {
+    if (this.initialized) Tone.getTransport().bpm.value = bpm * (compound ? 1.5 : 1);
+  }
+  practiceNote(sound: PracticeSound, time: number, bpm: number) {
+    const voice = this.practiceVoices[sound.channel];
+    if (!voice) return;
+    const instrument = voice.sampler.loaded ? voice.sampler : voice.synth;
+    instrument.triggerAttackRelease(
+      sound.notes.map((note) => Tone.Frequency(note, 'midi').toNote()),
+      (sound.durationBeats * 60) / bpm,
+      time,
+      sound.velocity,
+    );
+  }
+  practiceClick(time: number, accent: boolean, strong: boolean) {
+    this.practiceClickSynth?.triggerAttackRelease(
+      accent ? 1400 : strong ? 1000 : 750,
+      0.025,
+      time,
+      accent ? 0.85 : 0.55,
+    );
+  }
+  practiceDraw(time: number, fn: () => void) {
+    const generation = this.practiceGeneration;
+    Tone.getDraw().schedule(() => {
+      if (generation === this.practiceGeneration) fn();
+    }, time);
+  }
+  announce(time: number, language: 'en' | 'pl', degree: number, accidental = 0) {
+    if (!this.practiceBuses || time < this.voiceBusyUntil - 0.001) return false;
+    const words = [...(accidental ? [accidental < 0 ? 'flat' : 'sharp'] : []), String(degree)];
+    const buffers = words.map((word) => this.voiceBuffers.get(`${language}/${word}`));
+    if (buffers.some((buffer) => !buffer?.loaded)) return false;
+    let cursor = time;
+    for (const buffer of buffers) {
+      const source = new Tone.ToneBufferSource(buffer!).connect(this.practiceBuses.voice);
+      this.speechSources.add(source);
+      source.onended = () => {
+        this.speechSources.delete(source);
+        source.dispose();
+      };
+      source.start(cursor);
+      cursor += buffer!.duration + 0.035;
+    }
+    this.voiceBusyUntil = cursor;
+    return true;
+  }
+  stopPractice() {
+    ++this.practiceGeneration;
+    if (this.practiceRepeat !== undefined) Tone.getTransport().clear(this.practiceRepeat);
+    this.practiceRepeat = undefined;
+    this.voiceBusyUntil = 0;
+    this.practiceClickSynth?.triggerRelease(Tone.immediate());
+    for (const voices of Object.values(this.practiceVoices)) {
+      voices.sampler.releaseAll(Tone.immediate());
+      voices.synth.releaseAll(Tone.immediate());
+    }
+    for (const source of this.speechSources) {
+      source.stop(Tone.immediate());
+      source.dispose();
+    }
+    this.speechSources.clear();
+    for (const bus of Object.values(this.practiceBuses ?? {})) {
+      bus.gain.cancelScheduledValues(0);
+      bus.gain.setValueAtTime(0, Tone.immediate());
+    }
   }
   dispose() {
     this.stopAll();
@@ -350,6 +528,17 @@ export class AudioService {
     this.metroGate?.dispose();
     this.master?.dispose();
     this.initialized = false;
+    for (const voices of Object.values(this.practiceVoices)) {
+      voices.sampler.dispose();
+      voices.synth.dispose();
+    }
+    for (const bus of Object.values(this.practiceBuses ?? {})) bus.dispose();
+    for (const buffer of this.voiceBuffers.values()) buffer.dispose();
+    this.practiceBuses = undefined;
+    this.practiceClickSynth?.dispose();
+    this.practiceClickSynth = undefined;
+    this.practiceVoices = {};
+    this.voiceBuffers.clear();
   }
 }
 export const audioService = new AudioService();

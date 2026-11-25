@@ -11,12 +11,14 @@ export function AudioControls({
   onBpmChange,
   onStop,
   recommendedBpm,
+  practice = false,
 }: {
   plan: PlaybackPlan;
   bpm: number;
   onBpmChange: (value: number) => void;
   onStop?: () => void;
   recommendedBpm?: number;
+  practice?: boolean;
 }) {
   const [details, setDetails] = useState(false);
   const state = useSyncExternalStore(audioService.subscribe, audioService.snapshot);
@@ -29,17 +31,20 @@ export function AudioControls({
   }, [prefs, bpm]);
   useEffect(() => () => audioService.stopAll(), []);
   const changeBpm = (value: number) => {
-    const next = Math.max(40, Math.min(180, Math.round(value / 5) * 5));
+    const next = Math.max(
+      practice ? 30 : 40,
+      Math.min(practice ? 200 : 180, Math.round(value / (practice ? 1 : 5)) * (practice ? 1 : 5)),
+    );
     onBpmChange(next);
     audioService.configure({ ...prefs, bpm: next });
     if (own) audioService.restart(next, prefs.loop);
     if (audio.metronome) void audioService.startMetronome();
-    void savePreferences({ audio: { ...prefs, bpm: next, bpmOverride: true } });
+    if (!practice) void savePreferences({ audio: { ...prefs, bpm: next, bpmOverride: true } });
   };
   const updatePrefs = (patch: Partial<AudioPreferences>) => {
     const value = { ...prefs, ...patch, bpm };
     audioService.configure(value);
-    void savePreferences({ audio: value });
+    void savePreferences({ audio: { ...value, bpm: practice ? prefs.bpm : bpm } });
     if (patch.loop !== undefined && own) audioService.restart(bpm, value.loop);
     if ((patch.subdivision || patch.beatsPerBar) && audio.metronome)
       void audioService.startMetronome();
@@ -100,8 +105,8 @@ export function AudioControls({
         <div className="bpm-control">
           <IconButton
             label="Уменьшить темп"
-            onClick={() => changeBpm(bpm - 5)}
-            disabled={bpm <= 40}
+            onClick={() => changeBpm(bpm - (practice ? 1 : 5))}
+            disabled={bpm <= (practice ? 30 : 40)}
           >
             <Minus size={17} />
           </IconButton>
@@ -109,9 +114,9 @@ export function AudioControls({
             <input
               aria-label="Темп BPM"
               type="number"
-              min={40}
-              max={180}
-              step={5}
+              min={practice ? 30 : 40}
+              max={practice ? 200 : 180}
+              step={practice ? 1 : 5}
               value={bpm}
               onChange={(e) => {
                 if (e.target.value) changeBpm(Number(e.target.value));
@@ -121,8 +126,8 @@ export function AudioControls({
           </label>
           <IconButton
             label="Увеличить темп"
-            onClick={() => changeBpm(bpm + 5)}
-            disabled={bpm >= 180}
+            onClick={() => changeBpm(bpm + (practice ? 1 : 5))}
+            disabled={bpm >= (practice ? 200 : 180)}
           >
             <Plus size={17} />
           </IconButton>
@@ -136,18 +141,18 @@ export function AudioControls({
         </button>
       </div>
       <div className="tempo-slider">
-        <span aria-hidden="true">40</span>
+        <span aria-hidden="true">{practice ? 30 : 40}</span>
         <input
           aria-label="Темп воспроизведения, BPM"
           aria-valuetext={`${bpm} ударов в минуту`}
           type="range"
-          min={40}
-          max={180}
-          step={5}
+          min={practice ? 30 : 40}
+          max={practice ? 200 : 180}
+          step={practice ? 1 : 5}
           value={bpm}
           onChange={(e) => changeBpm(Number(e.target.value))}
         />
-        <span aria-hidden="true">180</span>
+        <span aria-hidden="true">{practice ? 200 : 180}</span>
       </div>
       {(prefs.muted || prefs.volume === 0) && (
         <div className="audio-muted-notice" role="status">

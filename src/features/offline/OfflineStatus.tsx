@@ -6,10 +6,41 @@ import { PIANO_FILES } from '../../audio/service';
 import { Dialog } from '../../components/ui';
 export function OfflineStatus() {
   const { pathname } = useLocation();
-  const activeLesson = pathname.startsWith('/lesson/') && !pathname.endsWith('/completed');
+  const activeLesson =
+    (pathname.startsWith('/lesson/') && !pathname.endsWith('/completed')) ||
+    pathname === '/practice/session';
   const [offline, setOffline] = useState(!navigator.onLine);
   const [cached, setCached] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+  const resources = [
+    ...PIANO_FILES.map((name) => `audio/piano/${name}.mp3`),
+    ...['en', 'pl'].flatMap((language) =>
+      ['1', '2', '3', '4', '5', '6', '7', 'flat', 'sharp'].map(
+        (word) => `audio/voice/${language}/${word}.wav`,
+      ),
+    ),
+  ];
+  const download = async () => {
+    setDownloading(true);
+    setDownloadError('');
+    try {
+      const cache = await caches.open('piano-practice-resources-v1');
+      for (const file of resources) {
+        const url = `${import.meta.env.BASE_URL}${file}`;
+        if (await caches.match(url)) continue;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Не все ресурсы доступны');
+        await cache.put(url, response);
+      }
+      setCached(true);
+    } catch {
+      setDownloadError('Не удалось загрузить все звуки. Проверь интернет и попробуй снова.');
+    } finally {
+      setDownloading(false);
+    }
+  };
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     offlineReady: [offlineReady],
@@ -38,11 +69,10 @@ export function OfflineStatus() {
       if (registration?.waiting) setNeedRefresh(true);
       if (!registration?.active) return;
       const files = await Promise.all(
-        PIANO_FILES.map((name) =>
-          caches.match(
-            new URL(`${import.meta.env.BASE_URL}audio/piano/${name}.mp3`, location.origin).href,
-            { ignoreSearch: true },
-          ),
+        resources.map((file) =>
+          caches.match(new URL(`${import.meta.env.BASE_URL}${file}`, location.origin).href, {
+            ignoreSearch: true,
+          }),
         ),
       );
       if (!cancelled) setCached(files.every(Boolean));
@@ -57,7 +87,7 @@ export function OfflineStatus() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [offlineReady, setNeedRefresh]);
+  }, [offlineReady, setNeedRefresh]); // Resource paths are a fixed bundled list.
   return (
     <>
       <div className="offline-status">
@@ -78,6 +108,16 @@ export function OfflineStatus() {
               : 'Подготовка офлайн-режима'}
         </span>
       </div>
+      {!cached && !activeLesson && (
+        <button
+          className="text-button small"
+          disabled={downloading || offline}
+          onClick={() => void download()}
+        >
+          {downloading ? 'Загружаем пианино и голоса…' : 'Загрузить звуки для офлайн-занятий'}
+        </button>
+      )}
+      {downloadError && <span role="status">{downloadError}</span>}
       {needRefresh && !activeLesson && (
         <button className="update-banner" onClick={() => setConfirm(true)}>
           <RefreshCw size={16} />

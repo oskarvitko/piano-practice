@@ -8,6 +8,9 @@ interface Props {
   activeLeft?: number[];
   activeRight?: number[];
   targets?: number[];
+  activeBass?: number[];
+  activeMelody?: number[];
+  showMidi?: boolean;
   root: number;
   labels?: Record<number, string>;
   names?: Record<number, string>;
@@ -23,6 +26,9 @@ export function PianoKeyboard({
   activeLeft = [],
   activeRight = [],
   targets = [],
+  activeBass = [],
+  activeMelody = [],
+  showMidi = false,
   root,
   labels = {},
   names = {},
@@ -63,10 +69,10 @@ export function PianoKeyboard({
     return (
       <g
         key={note}
-        className={`piano-key ${black ? 'black' : 'white'} ${chosen ? 'selected' : ''} ${playing ? 'playing' : ''} ${left ? 'left-hand' : ''} ${right ? 'right-hand' : ''} ${target ? 'target-key' : ''}`}
+        className={`piano-key ${black ? 'black' : 'white'} ${chosen ? 'selected' : ''} ${playing ? 'playing' : ''} ${left ? 'left-hand' : ''} ${right ? 'right-hand' : ''} ${target ? 'target-key' : ''} ${activeMelody.includes(note) ? 'melody-key' : ''}`}
         role={onNote ? 'button' : undefined}
         tabIndex={onNote ? 0 : undefined}
-        aria-label={`${name}${tonic ? ', тоника' : ''}${labels[note] ? `, ступень ${labels[note]}` : ''}${playing ? ', звучит' : ''}${left ? ', левая рука' : ''}${right ? ', правая рука' : ''}${target ? ', целевая нота' : ''}`}
+        aria-label={`${name}${tonic ? ', тоника' : ''}${labels[note] ? `, ступень ${labels[note]}` : ''}${playing ? ', звучит' : ''}${left ? ', левая рука' : ''}${right ? ', правая рука' : ''}${target ? ', целевая нота' : ''}${activeBass.includes(note) ? ', бас' : ''}${activeMelody.includes(note) ? ', мелодия' : ''}${showMidi ? `, MIDI ${note}` : ''}`}
         onClick={() => onNote?.(note)}
         onKeyDown={(e) => {
           if (onNote && (e.key === 'Enter' || e.key === ' ')) {
@@ -127,6 +133,16 @@ export function PianoKeyboard({
         )}
         {target && (
           <path className="target-marker" d={`M${x + (black ? 14 : 21)} 6 l4 4 l-4 4 l-4 -4 z`} />
+        )}
+        {showMidi && (
+          <text
+            className="key-midi"
+            x={x + (black ? 13 : 20)}
+            y={black ? height * 0.48 : height - 32}
+            textAnchor="middle"
+          >
+            {note}
+          </text>
         )}
         {playing && (!left || right) && (
           <path className="active-marker" d={`M${x + (black ? 10 : 17)} 18 l4 6 l4 -6 z`} />

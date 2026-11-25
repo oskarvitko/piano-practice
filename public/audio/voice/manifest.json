@@ -1,0 +1,204 @@
+{
+  "generator": "Piper 1.8.0",
+  "modelRevision": "5ec43b186ef915a195d3ddbcfd9916e76c503c3f",
+  "clips": [
+    {
+      "path": "en/1.wav",
+      "text": "One",
+      "durationSeconds": 0.305488,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -17.647,
+      "sha256": "fd088587226d1353bbc3aaaea2f5930f9d80b1bc65f124d825832e7e01ff85b0"
+    },
+    {
+      "path": "en/2.wav",
+      "text": "Two",
+      "durationSeconds": 0.28068,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -16.839,
+      "sha256": "3ee7100875a1dc344dc6c1c1288f35ebe031c2d29aefca87e9578863fb78dc7e"
+    },
+    {
+      "path": "en/3.wav",
+      "text": "Three",
+      "durationSeconds": 0.299501,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -17.824,
+      "sha256": "ee7f0d799c54f66224ab50143d46add67b75af960386d92478b31c2d73ff9fb2"
+    },
+    {
+      "path": "en/4.wav",
+      "text": "Four",
+      "durationSeconds": 0.398912,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -16.315,
+      "sha256": "47e721db0c67f91ca6edcfcba3faf4be60048b83de474797f06b139bf92ccc08"
+    },
+    {
+      "path": "en/5.wav",
+      "text": "Five",
+      "durationSeconds": 0.364172,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -18.191,
+      "sha256": "957e3fafb820745499edeea4a71b2a49b5f0aac2f7f49f3df9b7e17425e1fa29"
+    },
+    {
+      "path": "en/6.wav",
+      "text": "Six",
+      "durationSeconds": 0.451746,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -20.512,
+      "sha256": "7d8cbecc2c43e7440158835c9a125b88a6e7c06bb560542d6def0426ae121ef8"
+    },
+    {
+      "path": "en/7.wav",
+      "text": "Seven",
+      "durationSeconds": 0.424308,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -18.817,
+      "sha256": "ae340575d7761be16cacf0f6c35c1583cf27c032a14aac2245800d6f1daf976d"
+    },
+    {
+      "path": "en/flat.wav",
+      "text": "Flat",
+      "durationSeconds": 0.364127,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -18.08,
+      "sha256": "869a658836ec8b321802a20ca87a014f90064d5923f8821c83b2e699f291ac1e"
+    },
+    {
+      "path": "en/sharp.wav",
+      "text": "Sharp",
+      "durationSeconds": 0.390567,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -16.873,
+      "sha256": "f6adab8598e3cede38786ffc92508ed8935f4d7dd00d91896dc63be0f58bea95"
+    },
+    {
+      "path": "pl/1.wav",
+      "text": "Jeden",
+      "durationSeconds": 0.59093,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -15.891,
+      "sha256": "f132d1d6ca0d09b997a4e6c2e1d00712a7dd813169b21a0afd1c607bf6f7642a"
+    },
+    {
+      "path": "pl/2.wav",
+      "text": "Dwa",
+      "durationSeconds": 0.657959,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -17.545,
+      "sha256": "d12d1c6c25aa97ef0e865b0001926c4d1f7259c23639b8f2f0ec7399bdf50403"
+    },
+    {
+      "path": "pl/3.wav",
+      "text": "Trzy",
+      "durationSeconds": 0.433469,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -15.363,
+      "sha256": "a4f4b76192a5d613d3edc56b925e392915967029e084b462c9b0c14d3bee9d15"
+    },
+    {
+      "path": "pl/4.wav",
+      "text": "Cztery",
+      "durationSeconds": 0.623855,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -17.384,
+      "sha256": "427312f523b7a5ac74b15612dc078bb49d97e599a339b8e20d3bca3a0d48b693"
+    },
+    {
+      "path": "pl/5.wav",
+      "text": "Pięć",
+      "durationSeconds": 0.513243,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -16.963,
+      "sha256": "35602a62d06991b81625d91910f488b75cc7b73cd21ec789b59a6d7ac71d7bdb"
+    },
+    {
+      "path": "pl/6.wav",
+      "text": "Sześć",
+      "durationSeconds": 0.511655,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -16.592,
+      "sha256": "3469ca2d34657a1c4076f41d093f04adf57a28a7221dc1c93c5a1c806f36e570"
+    },
+    {
+      "path": "pl/7.wav",
+      "text": "Siedem",
+      "durationSeconds": 0.590612,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -16.292,
+      "sha256": "e64e33578b2531d44690a310221f234ba8edeae89da74dd266624fc25c59aae1"
+    },
+    {
+      "path": "pl/flat.wav",
+      "text": "Bemol",
+      "durationSeconds": 0.541088,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -15.107,
+      "sha256": "b782cb2b7209cafc4720ce58e8f6db7ee2b0b715484569cb6932bc59b0d08fee"
+    },
+    {
+      "path": "pl/sharp.wav",
+      "text": "Krzyżyk",
+      "durationSeconds": 0.570023,
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "peakDbfs": -2.0,
+      "rmsDbfs": -16.589,
+      "sha256": "40a83dc5bcbc3092fdf0fc472cdd966f56b15853fd390c99b30f258a79d827ed"
+    }
+  ]
+}

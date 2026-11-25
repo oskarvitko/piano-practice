@@ -1,0 +1,43 @@
+Piano Practice degree announcements
+
+These are synthetic speech clips generated locally on 2026-11-25 with Piper
+1.8.0. They contain only the English and Polish words listed in manifest.json.
+They are not recordings taken from songs or from a commercial voice service.
+
+English: en_US-joe-medium (Joe).
+Polish: pl_PL-darkman-medium (Darkman).
+Dataset contributors: Joe, Darkman, rdh, and the Nabu Casa / Open Home Foundation
+voice-dataset community. Thank you for making these voices available.
+
+Both selected voice models use their CC0 speech datasets and the CC0 rdh base,
+which was trained from scratch. The pinned model revision is:
+  rhasspy/piper-voices @ 5ec43b186ef915a195d3ddbcfd9916e76c503c3f
+
+Source dataset and dedication:
+  https://github.com/OHF-Voice/voice-datasets
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+Exact model provenance:
+  https://huggingface.co/rhasspy/piper-voices/blob/5ec43b186ef915a195d3ddbcfd9916e76c503c3f/en/en_US/joe/medium/MODEL_CARD
+  https://huggingface.co/rhasspy/piper-voices/blob/5ec43b186ef915a195d3ddbcfd9916e76c503c3f/pl/pl_PL/darkman/medium/MODEL_CARD
+  https://huggingface.co/rhasspy/piper-voices/blob/5ec43b186ef915a195d3ddbcfd9916e76c503c3f/nl/nl_BE/rdh/medium/MODEL_CARD
+
+Upstream licensing explanation:
+  https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/LICENSING.md
+  https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/COMMERCIAL_USE.md
+
+The bundled WAV recordings are released under CC0 1.0, to the extent any
+copyright or related rights in these generated clips can be held and waived.
+No endorsement by the voice contributors or Piper is implied.
+
+Piper's engine is GPL-3.0-or-later:
+  https://github.com/OHF-Voice/piper1-gpl
+The engine, model weights, and their dependencies are development tools only;
+they are not included in this application or sent to its users. The application
+plays the generated local WAV files and performs no runtime speech synthesis.
+
+Reproduction: scripts/generate-voices.py in the Piano Practice repository pins
+both model downloads and verifies their SHA-256 digests. Processing trims excess
+edge silence, adds short fades, and normalizes the peak to -2 dBFS. Output format:
+mono signed 16-bit PCM WAV, 22050 Hz. manifest.json records each resulting clip's
+text, duration, format, level, and SHA-256 digest.

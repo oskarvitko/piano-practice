@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  difficultSchema,
+  practiceConfigSchema,
+  trainerSessionSchema,
+} from '../core/practice/validation';
+import type { DifficultTask, TrainerSession } from '../core/practice/types';
 import type { PracticeDB, Setting } from './db';
 import type {
   LessonProgress,
@@ -53,12 +59,15 @@ const musicalExample = z
     root: midi,
     bpm: z.number().min(40).max(180),
     beatsPerBar: z.number().int().min(1).max(12),
+    meter: z.enum(['4/4', '3/4', '6/8', '2/4']).optional(),
     lengthBeats: z.number().positive().max(256),
     progression: z
       .array(
         z.object({
           name: z.string(),
           symbol: z.string(),
+          displaySuffix: z.string().optional(),
+          bassDegree: degree.optional(),
           degree,
           quality: z.enum(['major', 'minor', 'dominant7']),
           notes: z.array(midi).min(1).max(24),
@@ -223,6 +232,8 @@ const schema = z.object({
     )
     .max(50000),
   practiceSessions: z.array(session).max(10000),
+  trainerSessions: z.array(trainerSessionSchema).max(10000).default([]),
+  difficultTasks: z.array(difficultSchema).max(10000).default([]),
   reviewItems: z
     .array(
       z
@@ -243,6 +254,8 @@ const schema = z.object({
     .max(20000),
 });
 export interface Backup {
+  trainerSessions?: TrainerSession[];
+  difficultTasks?: DifficultTask[];
   format: 'piano-practice';
   version: 2;
   exportedAt: number;
@@ -263,6 +276,8 @@ export async function exportBackup(db: PracticeDB): Promise<Backup> {
     lessonProgress: await db.lessonProgress.toArray(),
     stepProgress: await db.stepProgress.toArray(),
     practiceSessions: await db.practiceSessions.toArray(),
+    trainerSessions: await db.trainerSessions.toArray(),
+    difficultTasks: await db.difficultTasks.toArray(),
     reviewItems: await db.reviewItems.toArray(),
   }));
 }
@@ -284,6 +299,12 @@ export function validateBackup(
   for (const setting of data.settings)
     if (setting.key === 'preferences' && !preferences.safeParse(setting.value).success)
       throw new Error('Некорректные настройки в резервной копии');
+  for (const setting of data.settings)
+    if (
+      setting.key.startsWith('practice-config-') &&
+      !practiceConfigSchema.safeParse(setting.value).success
+    )
+      throw new Error('Некорректные настройки тренажёра');
   const tables: [string, string[]][] = [
     ['settings', data.settings.map((x) => x.key)],
     ['programProgress', data.programProgress.map((x) => x.programId)],
@@ -293,6 +314,8 @@ export function validateBackup(
       data.stepProgress.map((x) => JSON.stringify([x.programId, x.lessonId, x.stepId])),
     ],
     ['practiceSessions', data.practiceSessions.map((x) => x.id)],
+    ['trainerSessions', (data.trainerSessions ?? []).map((x) => x.id)],
+    ['difficultTasks', (data.difficultTasks ?? []).map((x) => x.id)],
     ['reviewItems', data.reviewItems.map((x) => x.key)],
   ];
   for (const [name, ids] of tables)
@@ -326,6 +349,8 @@ export async function importBackup(db: PracticeDB, backup: Backup): Promise<void
     await db.lessonProgress.bulkPut(valid.lessonProgress);
     await db.stepProgress.bulkPut(valid.stepProgress);
     await db.practiceSessions.bulkPut(valid.practiceSessions);
+    await db.trainerSessions.bulkPut(valid.trainerSessions ?? []);
+    await db.difficultTasks.bulkPut(valid.difficultTasks ?? []);
     await db.reviewItems.bulkPut(valid.reviewItems);
   });
 }

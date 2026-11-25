@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import type { TrainerSession, DifficultTask } from '../core/practice/types';
 import type {
   LessonProgress,
   PracticeSession,
@@ -11,6 +12,8 @@ export interface Setting {
   value: unknown;
 }
 export class PracticeDB extends Dexie {
+  trainerSessions!: Table<TrainerSession, string>;
+  difficultTasks!: Table<DifficultTask, string>;
   settings!: Table<Setting, string>;
   programProgress!: Table<ProgramProgress, string>;
   lessonProgress!: Table<LessonProgress, [string, string]>;
@@ -44,6 +47,10 @@ export class PracticeDB extends Dexie {
             for (const step of Object.values(row.steps)) step.timerSeconds ??= step.elapsedSeconds;
           });
       });
+    this.version(3).stores({
+      trainerSessions: 'id,startedAt,updatedAt,phase',
+      difficultTasks: 'id,lastAt,style',
+    });
   }
 }
 export const db = new PracticeDB();

@@ -40,6 +40,8 @@ export interface MusicalEvent {
 }
 export interface MusicalChord {
   name: string;
+  displaySuffix?: string;
+  bassDegree?: Degree;
   symbol: string;
   degree: Degree;
   quality: 'major' | 'minor' | 'dominant7';
@@ -60,6 +62,7 @@ export interface MusicalExample {
   root: number;
   bpm: number;
   beatsPerBar: number;
+  meter?: '4/4' | '3/4' | '6/8' | '2/4';
   lengthBeats: number;
   progression: MusicalChord[];
   events: MusicalEvent[];

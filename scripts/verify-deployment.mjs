@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
 const site = new URL(process.argv[2] ?? process.env.DEPLOYMENT_URL);
 const attempts = Number(process.env.DEPLOYMENT_CHECK_ATTEMPTS ?? 1);
 if (
@@ -49,8 +52,25 @@ async function verify() {
     }
     if (!(await response.text()).trim()) throw new Error(`Empty asset: ${url}`);
   }
+  const manifest = await (await request(new URL('manifest.webmanifest', site))).json();
+  if (manifest.display !== 'standalone' || manifest.orientation !== 'any')
+    throw new Error('Unexpected PWA manifest');
+  const sw = await (await request(new URL('sw.js', site))).text();
+  if (!sw.includes('audio/voice/en/1.wav') || !sw.includes('audio/voice/pl/1.wav'))
+    throw new Error('Voice assets missing from service worker');
+  const voices = JSON.parse(
+    readFileSync(new URL('../public/audio/voice/manifest.json', import.meta.url), 'utf8'),
+  );
+  await Promise.all(
+    voices.clips.map(async (clip) => {
+      const response = await request(new URL(`audio/voice/${clip.path}`, site));
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (createHash('sha256').update(buffer).digest('hex') !== clip.sha256)
+        throw new Error(`Incorrect published voice: ${clip.path}`);
+    }),
+  );
   console.log(
-    `Deployment verified: ${site} (${scripts.length} scripts, ${styles.length} stylesheets)`,
+    `Deployment verified: ${site} (${scripts.length} scripts, ${styles.length} stylesheets, PWA and ${voices.clips.length} voice checksums)`,
   );
 }
 

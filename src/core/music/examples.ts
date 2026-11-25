@@ -1,10 +1,15 @@
 import type { MusicalChord, MusicalExample, PlaybackPlan } from '../types';
 import { spellDegree } from './index';
 
-export function chordName(root: number, chord: Pick<MusicalChord, 'degree' | 'quality'>) {
+export function chordName(
+  root: number,
+  chord: Pick<MusicalChord, 'degree' | 'quality' | 'displaySuffix' | 'bassDegree'>,
+) {
   return (
     spellDegree(root, chord.degree, false) +
-    (chord.quality === 'minor' ? 'm' : chord.quality === 'dominant7' ? '7' : '')
+    (chord.displaySuffix ??
+      (chord.quality === 'minor' ? 'm' : chord.quality === 'dominant7' ? '7' : '')) +
+    (chord.bassDegree ? `/${spellDegree(root, chord.bassDegree, false)}` : '')
   );
 }
 
@@ -51,6 +56,7 @@ export function examplePlaybackPlan(example: MusicalExample, bpm = example.bpm):
 }
 
 export function rhythmLabel(beats: number) {
+  if (Math.abs(beats - 1 / 3) < 1e-6) return '1/8 триоль';
   return (
     (
       {
@@ -63,6 +69,6 @@ export function rhythmLabel(beats: number) {
         3: '1/2 с точкой',
         4: 'целая',
       } as Record<number, string>
-    )[beats] ?? `${beats} доли`
+    )[beats] ?? `${Number(beats.toFixed(2))} доли`
   );
 }

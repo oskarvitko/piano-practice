@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AudioService } from './service';
 import { examplePlaybackPlan } from '../core/music/examples';
 import { EXAMPLE_LIBRARY } from '../programs/scales-and-runs/examples';
+import { defaultConfig } from '../core/practice/config';
 
 interface PartRecord {
   values: unknown[];
@@ -16,7 +17,14 @@ const fake = vi.hoisted(() => ({
   parts: [] as PartRecord[],
   draws: [] as (() => void)[],
   instruments: [] as { kind: string; attacks: unknown[][]; releases: number }[],
+  pulses: [] as ((time: number) => void)[],
+  sources: [] as { started: number; stopped: boolean }[],
+  loaded: [] as string[],
+  failVoice: false,
   transport: {
+    bpm: { value: 120 },
+    scheduleRepeat: vi.fn(),
+    clear: vi.fn(),
     state: 'stopped',
     seconds: 0,
     start() {
@@ -61,6 +69,34 @@ vi.mock('tone', () => {
     dispose() {}
   }
   return {
+    ToneAudioBuffer: class {
+      duration = 0.4;
+      loaded = true;
+      async load(path: string) {
+        if (fake.failVoice) throw new Error('offline');
+        fake.loaded.push(path);
+        return this;
+      }
+      dispose() {}
+    },
+    ToneBufferSource: class {
+      started = -1;
+      stopped = false;
+      onended?: () => void;
+      constructor() {
+        fake.sources.push(this);
+      }
+      connect() {
+        return this;
+      }
+      start(time: number) {
+        this.started = time;
+      }
+      stop() {
+        this.stopped = true;
+      }
+      dispose() {}
+    },
     Gain,
     Synth: class extends Instrument {
       constructor() {
@@ -123,6 +159,14 @@ beforeEach(() => {
   fake.parts.length = 0;
   fake.draws.length = 0;
   fake.instruments.length = 0;
+  fake.pulses.length = 0;
+  fake.sources.length = 0;
+  fake.loaded.length = 0;
+  fake.failVoice = false;
+  fake.transport.scheduleRepeat.mockImplementation((callback: (time: number) => void) => {
+    fake.pulses.push(callback);
+    return fake.pulses.length;
+  });
   service = new AudioService();
 });
 afterEach(() => service.dispose());
@@ -186,4 +230,54 @@ it('rebuilds both schedules at a changed BPM without overlapping the previous pl
   expect(old.every((part) => part.disposed)).toBe(true);
   expect(fake.parts.at(-2)?.loopEnd).toBe(4);
   expect(fake.parts.at(-1)?.loopEnd).toBe(4);
+});
+
+it('drives Practice from the transport, changes tempo live and invalidates old callbacks on stop', async () => {
+  const pulse = vi.fn(),
+    draw = vi.fn();
+  const config = defaultConfig('chord');
+  await service.beginPractice(60, config.channels, pulse);
+  expect(fake.transport.scheduleRepeat).toHaveBeenCalledWith(expect.any(Function), '32t', 0);
+  fake.pulses[0](0.15);
+  expect(pulse).toHaveBeenCalledOnce();
+  service.practiceTempo(137);
+  expect(fake.transport.bpm.value).toBe(137);
+  service.practiceNote(
+    { channel: 'harmony', notes: [60, 64, 67], durationBeats: 2, velocity: 0.6 },
+    1,
+    120,
+  );
+  expect(
+    fake.instruments.some((i) =>
+      i.attacks.some((a) => JSON.stringify(a) === JSON.stringify([[60, 64, 67], 1, 1, 0.6])),
+    ),
+  ).toBe(true);
+  service.practiceDraw(2, draw);
+  const delayed = [...fake.draws];
+  service.stopAll();
+  fake.pulses[0](3);
+  delayed.forEach((f) => f());
+  expect(pulse).toHaveBeenCalledOnce();
+  expect(draw).not.toHaveBeenCalled();
+  expect(fake.transport.clear).toHaveBeenCalledWith(1);
+  expect(fake.transport.state).toBe('stopped');
+  await service.beginPractice(80, config.channels, pulse, true);
+  expect(fake.transport.bpm.value).toBe(120);
+  service.practiceTempo(100, true);
+  expect(fake.transport.bpm.value).toBe(150);
+});
+it('plays local compound voice labels without overlap, cancels queued speech and reports missing files', async () => {
+  const config = defaultConfig('degree');
+  await service.beginPractice(200, config.channels, () => {});
+  await service.prepareVoice('pl');
+  await service.prepareVoice('pl');
+  expect(fake.loaded).toHaveLength(9);
+  expect(service.announce(1, 'pl', 3, -1)).toBe(true);
+  expect(fake.sources.map((s) => s.started)).toEqual([1, 1.435]);
+  expect(service.announce(1.3, 'pl', 4)).toBe(false);
+  expect(fake.sources).toHaveLength(2);
+  service.stopAll();
+  expect(fake.sources.every((s) => s.stopped)).toBe(true);
+  fake.failVoice = true;
+  await expect(service.prepareVoice('en')).rejects.toThrow('Голос ещё не загружен');
 });
