@@ -497,10 +497,82 @@
   min-height: 50px;
   white-space: nowrap;
 }
+.practice-primary-actions .button[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+.has-keyboard-hint .practice-task-stage {
+  min-height: 170px;
+}
+.practice-live-hint {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-raised);
+}
+.practice-hint-caption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+}
+.practice-hint-caption span,
+.practice-hint-legend,
+.practice-voice-description {
+  font-size: 0.875rem;
+  color: var(--muted-text);
+}
+.practice-hint-legend {
+  margin: 8px 0 0;
+}
+.practice-hint-hands {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+  gap: 12px;
+}
+.practice-hint-hands > div {
+  min-width: 0;
+}
+.practice-hint-hand-label {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  color: var(--muted-text);
+}
+.practice-voice-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 12px 0;
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.practice-voice-panel .practice-check {
+  margin: 0;
+  min-height: 44px;
+}
+.practice-voice-panel button {
+  min-height: 44px;
+}
+.practice-voice-panel p {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted-text);
+}
+.practice-quick-assistance {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
 .practice-secondary-actions {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .practice-secondary-actions button {
   display: flex;
@@ -748,6 +820,30 @@
   .practice-session-details,
   .practice-inline-hint {
     grid-column: 1/-1;
+  }
+  .practice-voice-panel {
+    grid-column: 2;
+    grid-row: 9;
+  }
+  .practice-live-hint .practice-hint-hands {
+    grid-template-columns: 1fr 1fr;
+  }
+  .practice-live-hint .practice-hint-hand-label {
+    font-size: 0.75rem;
+  }
+  .has-keyboard-hint .practice-task-stage {
+    grid-row: 3/5;
+    min-height: 110px;
+  }
+  .practice-live-hint {
+    grid-column: 1;
+    grid-row: 5/10;
+    margin: 0;
+  }
+  .has-keyboard-hint .practice-task-value {
+    margin: 4px 0;
+    font-size: 2.8rem;
+    line-height: 1;
   }
   .mode-switch {
     margin-top: 3px;

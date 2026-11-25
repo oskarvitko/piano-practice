@@ -4,7 +4,12 @@ import { db } from '../../database/db';
 import { TrainerRepository } from '../../database/trainers';
 import { PracticeEngine, hardIdentity } from '../../core/practice/engine';
 import { configProblems } from '../../core/practice/harmony';
-import { meterInfo } from '../../core/practice/config';
+import {
+  keyboardHintEnabled,
+  meterInfo,
+  withHintMode,
+  withVoiceEnabled,
+} from '../../core/practice/config';
 import type { Channel, PracticeConfig, TrainerSession } from '../../core/practice/types';
 import { practiceLibrary } from './library';
 
@@ -19,6 +24,8 @@ interface State {
   right: number[];
   melody: number[];
   bass: number[];
+  voiceLoading: boolean;
+  voiceMessage: string | null;
 }
 class PracticeController {
   private engine?: PracticeEngine;
@@ -33,8 +40,11 @@ class PracticeController {
     right: [],
     melody: [],
     bass: [],
+    voiceLoading: false,
+    voiceMessage: null,
   };
   private generation = 0;
+  private voiceOperation = 0;
   private tick = 0;
   private lastSave = 0;
   private held: { end: number; notes: number[]; hand: 'left' | 'right'; channel: Channel }[] = [];
@@ -90,6 +100,13 @@ class PracticeController {
   }
   async start(next = false) {
     if (!this.engine || this.state.loading) return;
+    const config = this.engine.session.config;
+    // Upgrade saved keyboard-only hints from the previous version on a user-initiated start.
+    if (
+      keyboardHintEnabled(config) &&
+      ['bass', 'harmony', 'melody'].every((channel) => !config.channels[channel as Channel].enabled)
+    )
+      this.config(withHintMode(config, config.hintMode));
     const token = ++this.generation;
     // This call must stay before the first await to unlock audio on iOS from the tap.
     const unlock = audioService.unlock();
@@ -202,9 +219,18 @@ class PracticeController {
   }
   pause(stopAudio = true) {
     ++this.generation;
+    ++this.voiceOperation;
     this.engine?.pause();
     if (stopAudio) audioService.stopAll();
-    this.update({ loading: false, left: [], right: [], melody: [], bass: [] });
+    this.update({
+      loading: false,
+      voiceLoading: false,
+      voiceMessage: null,
+      left: [],
+      right: [],
+      melody: [],
+      bass: [],
+    });
     this.save();
   }
   hint() {
@@ -238,6 +264,7 @@ class PracticeController {
     this.update({ taskBeat: 0 });
     this.save();
     if (running) void this.start();
+    else if (this.engine && keyboardHintEnabled(this.engine.session.config)) this.previewHint();
   }
   bpm(value: number) {
     this.engine?.setBpm(value);
@@ -252,12 +279,15 @@ class PracticeController {
     this.save();
   }
   config(config: PracticeConfig) {
-    if (config.channels.voice.enabled)
-      void audioService
-        .prepareVoice(config.voiceLanguage)
-        .catch((error) =>
-          this.update({ error: error instanceof Error ? error.message : 'Голос недоступен' }),
-        );
+    const previous = this.engine?.session.config;
+    const voiceChanged =
+      config.channels.voice.enabled &&
+      (!previous?.channels.voice.enabled || previous.voiceLanguage !== config.voiceLanguage);
+    if (voiceChanged) config = withVoiceEnabled(config, true);
+    if (!config.channels.voice.enabled) {
+      ++this.voiceOperation;
+      this.update({ voiceLoading: false, voiceMessage: null });
+    }
     this.engine?.setConfig(config);
     audioService.configurePracticeChannels(config.channels);
     void trainerRepository
@@ -265,11 +295,78 @@ class PracticeController {
       .catch(() => this.update({ error: 'Не удалось сохранить настройки' }));
     this.update();
     this.save();
+    if (voiceChanged) void this.previewVoice();
+  }
+  toggleHint() {
+    if (!this.engine) return;
+    const config = this.engine.session.config;
+    const enabled = !keyboardHintEnabled(config);
+    if (enabled) this.engine.session.statistics.hints++;
+    else audioService.stop();
+    this.config(withHintMode(config, enabled ? 'keyboard' : 'hidden'));
+    if (enabled) this.previewHint();
+  }
+  private previewHint() {
+    if (!this.engine) return;
+    const { config } = this.engine.session;
+    void audioService
+      .previewPractice(practiceSounds(this.engine.current, config, 0), config.bpm)
+      .catch((error) =>
+        this.update({ error: error instanceof Error ? error.message : 'Пример недоступен' }),
+      );
+  }
+  voice(enabled: boolean) {
+    if (this.engine) this.config(withVoiceEnabled(this.engine.session.config, enabled));
+  }
+  testVoice() {
+    if (!this.engine) return;
+    if (!this.engine.session.config.channels.voice.enabled) this.voice(true);
+    else {
+      this.config(withVoiceEnabled(this.engine.session.config, true));
+      void this.previewVoice();
+    }
+  }
+  private async previewVoice() {
+    if (!this.engine) return;
+    const token = ++this.voiceOperation;
+    const { config } = this.engine.session;
+    const chord = this.engine.current.chord;
+    const playback = audioService.previewVoice(
+      config.voiceLanguage,
+      chord.degree,
+      chord.accidental,
+    );
+    this.update({ voiceLoading: true, voiceMessage: 'Загружаем голос…', error: null });
+    try {
+      const played = await playback;
+      if (token !== this.voiceOperation) return;
+      this.update({
+        voiceLoading: false,
+        voiceMessage: played
+          ? `Проверка голоса: ступень ${chord.degreeLabel} · ${config.voiceLanguage === 'en' ? 'English' : 'Polski'}`
+          : null,
+      });
+    } catch (error) {
+      if (token === this.voiceOperation)
+        this.update({
+          voiceLoading: false,
+          voiceMessage: null,
+          error: error instanceof Error ? error.message : 'Голос недоступен',
+        });
+    }
   }
   finish() {
+    ++this.voiceOperation;
     this.engine?.finish();
     audioService.stopAll();
-    this.update({ left: [], right: [], melody: [], bass: [] });
+    this.update({
+      voiceLoading: false,
+      voiceMessage: null,
+      left: [],
+      right: [],
+      melody: [],
+      bass: [],
+    });
     this.save();
   }
 }

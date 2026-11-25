@@ -3,7 +3,15 @@ import { Link } from 'react-router-dom';
 import { Play, Pause, Square, Eye, Flag, Settings2, SkipForward, RotateCcw } from 'lucide-react';
 import { practiceController as controller, trainerRepository } from './controller';
 import { ChannelsForm, Field } from './Configuration';
-import { keyName, meterInfo, STYLES, TRAINERS } from '../../core/practice/config';
+import {
+  keyboardHintEnabled,
+  keyName,
+  meterInfo,
+  STYLES,
+  TRAINERS,
+  withHintMode,
+} from '../../core/practice/config';
+import { voiceLead } from '../../audio/practice-scheduler';
 import { supportsVoicing, voiceChord } from '../../core/practice/chords';
 import type { PracticeConfig, PracticeTask, TrainerSession } from '../../core/practice/types';
 import { MusicalExamplePlayer } from '../../components/MusicalExamplePlayer';
@@ -181,19 +189,37 @@ export function PracticeSessionScreen() {
       </div>
     );
   const hinted = config.hintMode !== 'hidden';
-  const displayKeyboard = ['keyboard', 'full'].includes(config.hintMode);
+  const displayKeyboard = keyboardHintEnabled(config);
+  const voiceOn =
+    config.channels.voice.enabled &&
+    config.voiceTiming !== 'off' &&
+    config.channels.voice.volume > 0;
+  const lead = voiceLead(config);
   const notes = task.plan
     ? [...new Set(task.plan.events.flatMap((e) => e.notes))]
     : [...task.voicing.leftHand, ...task.voicing.rightHand];
+  const chordDiagram = task.trainer !== 'scale' && task.trainer !== 'fill';
+  const bassOnly = config.trainer === 'degree' && config.degreeTask === 'bass';
+  const hintHands = chordDiagram
+    ? [
+        {
+          label: 'Левая рука',
+          notes: bassOnly ? task.voicing.leftHand.slice(0, 1) : task.voicing.leftHand,
+          left: true,
+        },
+        ...(!bassOnly
+          ? [{ label: 'Правая рука', notes: task.voicing.rightHand, left: false }]
+          : []),
+      ]
+    : [];
   const updateHint = (mode: PracticeConfig['hintMode']) => {
-    if (mode === 'full') {
-      controller.hint();
-      return;
-    }
-    controller.config({ ...config, hintMode: mode });
+    controller.config(withHintMode(config, mode));
   };
   return (
-    <div className="practice-session" data-phase={session.phase}>
+    <div
+      className={`practice-session ${displayKeyboard ? 'has-keyboard-hint' : ''}`}
+      data-phase={session.phase}
+    >
       <header className="practice-session-heading">
         <Link to="/practice">Practice</Link>
         <span>{TRAINERS[config.trainer].name}</span>
@@ -252,6 +278,144 @@ export function PracticeSessionScreen() {
           </>
         )}
       </div>
+      <div className="practice-primary-actions">
+        <button
+          className="button secondary"
+          aria-pressed={displayKeyboard}
+          onClick={() => controller.toggleHint()}
+        >
+          <Eye size={19} />
+          Подсказка
+        </button>
+        <button
+          className="button primary"
+          disabled={state.loading}
+          onClick={() => (running ? controller.pause() : void controller.start())}
+        >
+          {running ? <Pause size={20} /> : <Play size={20} />}{' '}
+          {state.loading
+            ? 'Загружаем…'
+            : running
+              ? 'Пауза'
+              : session.phase === 'ready'
+                ? 'Start'
+                : 'Продолжить'}
+        </button>
+        <button className="button secondary" onClick={() => controller.hard()}>
+          <Flag size={18} />
+          Сложно
+          {session.difficult.some((d) => d.id === hardIdentity(task, config.style)) ? ' ✓' : ''}
+        </button>
+      </div>
+      {state.error && <ErrorMessage>{state.error}</ErrorMessage>}
+      <div className="practice-voice-panel">
+        <label className="practice-check">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={voiceOn}
+            onChange={(e) => controller.voice(e.target.checked)}
+          />
+          Голос
+        </label>
+        <span className="practice-voice-description">
+          {voiceOn
+            ? `${config.voiceLanguage === 'en' ? 'English' : 'Polski'} · ${lead === 2 ? 'за две доли' : lead === 1 ? 'за одну долю' : 'при смене задания'}`
+            : 'Выключен'}
+        </span>
+        <button
+          className="text-button"
+          disabled={state.voiceLoading}
+          onClick={() => controller.testVoice()}
+        >
+          {state.voiceLoading ? 'Загружаем…' : 'Проверить голос'}
+        </button>
+        {state.voiceMessage && <p role="status">{state.voiceMessage}</p>}
+      </div>
+      {displayKeyboard && (
+        <section className="practice-live-hint" aria-label="Подсказка текущего задания">
+          <div className="practice-hint-caption">
+            <strong>{config.trainer === 'scale' ? task.instruction : task.chord.symbol}</strong>
+            <span>
+              {config.trainer === 'scale' || config.trainer === 'fill'
+                ? 'Клавиши и пример'
+                : 'Клавиши и звук аккорда'}
+            </span>
+          </div>
+          {chordDiagram ? (
+            <div className="practice-hint-hands">
+              {hintHands.map((hand) => (
+                <div key={hand.label}>
+                  <p className="practice-hint-hand-label">
+                    {hand.left ? '●' : '▼'} {hand.label} ·{' '}
+                    {hand.notes
+                      .map((n) => task.voicing.names[n] ?? getNoteName(n, 60 + task.key.pc))
+                      .join(' · ')}
+                  </p>
+                  <PianoKeyboard
+                    notes={hand.notes}
+                    root={60 + task.key.pc}
+                    active={hand.notes}
+                    activeLabel="в аккорде"
+                    activeLeft={hand.left ? hand.notes : []}
+                    activeRight={hand.left ? [] : hand.notes}
+                    names={task.voicing.names}
+                    showMidi={showMidi}
+                    display={keyboard}
+                    compact
+                    onNote={(note) => {
+                      controller.pause();
+                      void audioService.note(note);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <PianoKeyboard
+              notes={notes}
+              rangeNotes={
+                task.trainer === 'fill'
+                  ? [
+                      ...notes,
+                      ...task.examples.flatMap((example) =>
+                        example.events.flatMap((event) => event.notes),
+                      ),
+                    ]
+                  : notes
+              }
+              root={60 + task.key.pc}
+              active={
+                task.trainer === 'scale' || task.trainer === 'fill'
+                  ? [...state.left, ...state.right]
+                  : notes
+              }
+              activeLeft={
+                task.trainer === 'scale' || task.trainer === 'fill'
+                  ? state.left
+                  : task.voicing.leftHand
+              }
+              activeRight={
+                task.trainer === 'scale' || task.trainer === 'fill'
+                  ? state.right
+                  : task.voicing.rightHand
+              }
+              activeBass={state.bass}
+              activeMelody={state.melody}
+              targets={task.targetNotes}
+              names={task.voicing.names}
+              showMidi={showMidi}
+              display={keyboard}
+              compact
+              onNote={(note) => {
+                controller.pause();
+                void audioService.note(note);
+              }}
+            />
+          )}
+          {!chordDiagram && <p className="practice-hint-legend">● Левая рука · ▼ Правая рука</p>}
+        </section>
+      )}
       <div className="practice-beats" aria-label={`Доля ${beat + 1} из ${meter.beats}`}>
         {Array.from({ length: meter.beats }, (_, i) => (
           <span key={i} className={i === beat && running ? 'current' : ''}>
@@ -308,32 +472,11 @@ export function PracticeSessionScreen() {
           onChange={(e) => controller.bpm(Number(e.target.value))}
         />
       </div>
-      <div className="practice-primary-actions">
-        <button className="button secondary" onClick={() => controller.hint()}>
-          <Eye size={19} />
-          Подсказка
-        </button>
-        <button
-          className="button primary"
-          disabled={state.loading}
-          onClick={() => (running ? controller.pause() : void controller.start())}
-        >
-          {running ? <Pause size={20} /> : <Play size={20} />}{' '}
-          {state.loading
-            ? 'Загружаем…'
-            : running
-              ? 'Пауза'
-              : session.phase === 'ready'
-                ? 'Start'
-                : 'Продолжить'}
-        </button>
-        <button className="button secondary" onClick={() => controller.hard()}>
-          <Flag size={18} />
-          Сложно
-          {session.difficult.some((d) => d.id === hardIdentity(task, config.style)) ? ' ✓' : ''}
-        </button>
-      </div>
       <div className="practice-secondary-actions">
+        <button className="text-button" onClick={() => controller.hint()}>
+          <Eye size={17} />
+          Разбор
+        </button>
         <button className="text-button" onClick={() => controller.next()}>
           <SkipForward size={17} />
           Следующее
@@ -343,7 +486,6 @@ export function PracticeSessionScreen() {
           Завершить
         </button>
       </div>
-      {state.error && <ErrorMessage>{state.error}</ErrorMessage>}
       <details className="practice-session-details">
         <summary>Фраза и подсказки</summary>
         <p>
@@ -364,8 +506,8 @@ export function PracticeSessionScreen() {
             <option value="hidden">Скрыты</option>
             <option value="chord-name">Название аккорда</option>
             <option value="notes">Название и ноты</option>
-            <option value="keyboard">Клавиатура</option>
-            <option value="full">Открыть демонстрацию</option>
+            <option value="keyboard">Клавиши и звук</option>
+            <option value="full">Полная подсказка со звуком</option>
           </select>
         </Field>
         <label className="practice-check">
@@ -377,7 +519,7 @@ export function PracticeSessionScreen() {
           MIDI-номера на клавишах
         </label>
       </details>
-      {hinted && (
+      {hinted && !displayKeyboard && (
         <div className="practice-inline-hint">
           <strong>{config.trainer === 'scale' ? task.instruction : task.chord.symbol}</strong>
           {config.hintMode !== 'chord-name' && (
@@ -388,25 +530,6 @@ export function PracticeSessionScreen() {
             </span>
           )}
         </div>
-      )}
-      {displayKeyboard && (
-        <PianoKeyboard
-          notes={notes}
-          root={60 + task.key.pc}
-          active={[...state.left, ...state.right]}
-          activeLeft={state.left}
-          activeRight={state.right}
-          activeBass={state.bass}
-          activeMelody={state.melody}
-          targets={task.targetNotes}
-          names={task.voicing.names}
-          showMidi={showMidi}
-          display={keyboard}
-          onNote={(note) => {
-            controller.pause();
-            void audioService.note(note);
-          }}
-        />
       )}
       {settings && (
         <Dialog title="Настройки тренировки" onClose={() => setSettings(false)}>
@@ -438,6 +561,26 @@ export function PracticeSessionScreen() {
               <option value="pl">Polski</option>
             </select>
           </Field>
+          <Field label="Когда произносить">
+            <select
+              value={config.voiceTiming}
+              onChange={(e) =>
+                controller.config({
+                  ...config,
+                  voiceTiming: e.target.value as PracticeConfig['voiceTiming'],
+                })
+              }
+            >
+              <option value="on-change">При смене задания</option>
+              <option value="one-beat-before">За одну долю</option>
+              <option value="two-beats-before">За две доли</option>
+              <option value="off">Выключено</option>
+            </select>
+          </Field>
+          <p className="muted">
+            Голос произносит номер ступени на выбранном языке. Без предпросмотра — при смене
+            задания. Кнопка «Проверить голос» включает его и произносит текущую ступень сразу.
+          </p>
           <p className="muted">
             Тональность, стиль и типы заданий выбираются перед новой тренировкой. Здесь сохраняется
             текущая музыкальная фраза.

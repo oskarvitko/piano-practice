@@ -40,6 +40,9 @@ export class AudioService {
   private speechSources = new Set<Tone.ToneBufferSource>();
   private voiceBusyUntil = 0;
   private practiceGeneration = 0;
+  private practiceChannels?: Channels;
+  private musicPreviewGeneration = 0;
+  private voicePreviewGeneration = 0;
   private interruptions = new Set<() => void>();
   onInterruption(fn: () => void) {
     this.interruptions.add(fn);
@@ -440,13 +443,58 @@ export class AudioService {
     this.update({ status: 'playing', planId: 'practice-stream', error: null });
   }
   configurePracticeChannels(channels: Channels) {
-    for (const channel of Object.keys(channels) as Channel[])
+    this.practiceChannels = channels;
+    for (const channel of Object.keys(channels) as Channel[]) {
+      if (!channels[channel].enabled || channels[channel].volume === 0) {
+        const voice = this.practiceVoices[channel];
+        voice?.sampler.releaseAll(Tone.immediate());
+        voice?.synth.releaseAll(Tone.immediate());
+        if (channel === 'voice') {
+          ++this.voicePreviewGeneration;
+          this.stopPracticeSpeech();
+        }
+      }
       this.practiceBuses?.[channel].gain.rampTo(
         channels[channel].enabled ? channels[channel].volume : 0,
         0.015,
       );
+    }
+    if (['bass', 'harmony', 'melody'].every((channel) => !channels[channel as Channel].enabled))
+      ++this.musicPreviewGeneration;
     // Learning's global mute does not silently disable independent Practice channels.
     this.master?.gain.rampTo(0.85, 0.015);
+  }
+  /** A tap can audition the current shape without starting or interrupting the clock. */
+  async previewPractice(sounds: PracticeSound[], bpm: number) {
+    const token = ++this.musicPreviewGeneration;
+    await this.unlock();
+    if (token !== this.musicPreviewGeneration || !this.practiceChannels) return;
+    this.ensurePracticeBuses();
+    this.configurePracticeChannels(this.practiceChannels);
+    const time = Tone.now();
+    for (const sound of sounds)
+      if (this.practiceChannels[sound.channel].enabled)
+        this.practiceNote(
+          { ...sound, durationBeats: Math.min(sound.durationBeats, (bpm / 60) * 1.3) },
+          time,
+          bpm,
+        );
+  }
+  async previewVoice(language: 'en' | 'pl', degree: number, accidental = 0) {
+    const token = ++this.voicePreviewGeneration;
+    // Unlock synchronously in the tap before downloading/decoding the local clips.
+    await this.unlock();
+    await this.prepareVoice(language);
+    if (
+      token !== this.voicePreviewGeneration ||
+      !this.practiceChannels?.voice.enabled ||
+      this.practiceChannels.voice.volume === 0
+    )
+      return false;
+    this.ensurePracticeBuses();
+    this.configurePracticeChannels(this.practiceChannels);
+    this.stopPracticeSpeech();
+    return this.announce(Tone.now(), language, degree, accidental);
   }
   practiceTempo(bpm: number, compound = false) {
     if (this.initialized) Tone.getTransport().bpm.value = bpm * (compound ? 1.5 : 1);
@@ -497,23 +545,28 @@ export class AudioService {
   }
   stopPractice() {
     ++this.practiceGeneration;
+    ++this.musicPreviewGeneration;
+    ++this.voicePreviewGeneration;
     if (this.practiceRepeat !== undefined) Tone.getTransport().clear(this.practiceRepeat);
     this.practiceRepeat = undefined;
-    this.voiceBusyUntil = 0;
     this.practiceClickSynth?.triggerRelease(Tone.immediate());
     for (const voices of Object.values(this.practiceVoices)) {
       voices.sampler.releaseAll(Tone.immediate());
       voices.synth.releaseAll(Tone.immediate());
     }
+    this.stopPracticeSpeech();
+    for (const bus of Object.values(this.practiceBuses ?? {})) {
+      bus.gain.cancelScheduledValues(0);
+      bus.gain.setValueAtTime(0, Tone.immediate());
+    }
+  }
+  private stopPracticeSpeech() {
+    this.voiceBusyUntil = 0;
     for (const source of this.speechSources) {
       source.stop(Tone.immediate());
       source.dispose();
     }
     this.speechSources.clear();
-    for (const bus of Object.values(this.practiceBuses ?? {})) {
-      bus.gain.cancelScheduledValues(0);
-      bus.gain.setValueAtTime(0, Tone.immediate());
-    }
   }
   dispose() {
     this.stopAll();

@@ -5,6 +5,7 @@ interface Props {
   notes: number[];
   rangeNotes?: number[];
   active?: number[];
+  activeLabel?: string;
   activeLeft?: number[];
   activeRight?: number[];
   targets?: number[];
@@ -23,6 +24,7 @@ export function PianoKeyboard({
   notes,
   rangeNotes,
   active = [],
+  activeLabel = 'звучит',
   activeLeft = [],
   activeRight = [],
   targets = [],
@@ -72,7 +74,7 @@ export function PianoKeyboard({
         className={`piano-key ${black ? 'black' : 'white'} ${chosen ? 'selected' : ''} ${playing ? 'playing' : ''} ${left ? 'left-hand' : ''} ${right ? 'right-hand' : ''} ${target ? 'target-key' : ''} ${activeMelody.includes(note) ? 'melody-key' : ''}`}
         role={onNote ? 'button' : undefined}
         tabIndex={onNote ? 0 : undefined}
-        aria-label={`${name}${tonic ? ', тоника' : ''}${labels[note] ? `, ступень ${labels[note]}` : ''}${playing ? ', звучит' : ''}${left ? ', левая рука' : ''}${right ? ', правая рука' : ''}${target ? ', целевая нота' : ''}${activeBass.includes(note) ? ', бас' : ''}${activeMelody.includes(note) ? ', мелодия' : ''}${showMidi ? `, MIDI ${note}` : ''}`}
+        aria-label={`${name}${tonic ? ', тоника' : ''}${labels[note] ? `, ступень ${labels[note]}` : ''}${playing ? `, ${activeLabel}` : ''}${left ? ', левая рука' : ''}${right ? ', правая рука' : ''}${target ? ', целевая нота' : ''}${activeBass.includes(note) ? ', бас' : ''}${activeMelody.includes(note) ? ', мелодия' : ''}${showMidi ? `, MIDI ${note}` : ''}`}
         onClick={() => onNote?.(note)}
         onKeyDown={(e) => {
           if (onNote && (e.key === 'Enter' || e.key === ' ')) {

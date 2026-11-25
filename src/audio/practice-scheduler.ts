@@ -98,8 +98,9 @@ export function practiceSounds(
 }
 export function voiceLead(config: PracticeConfig) {
   if (!config.channels.voice.enabled || config.voiceTiming === 'off') return null;
-  if (config.previewCount === 0 && !config.anticipatoryVoice && config.voiceTiming !== 'on-change')
-    return null;
+  // Hidden previews must not reveal the future, but still announce the current task.
+  if (config.changeEvery === 'manual' || (config.previewCount === 0 && !config.anticipatoryVoice))
+    return 0;
   return config.voiceTiming === 'two-beats-before'
     ? 2
     : config.voiceTiming === 'one-beat-before'

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AudioService } from './service';
 import { examplePlaybackPlan } from '../core/music/examples';
 import { EXAMPLE_LIBRARY } from '../programs/scales-and-runs/examples';
-import { defaultConfig } from '../core/practice/config';
+import { defaultConfig, withHintMode, withVoiceEnabled } from '../core/practice/config';
 
 interface PartRecord {
   values: unknown[];
@@ -280,4 +280,48 @@ it('plays local compound voice labels without overlap, cancels queued speech and
   expect(fake.sources.every((s) => s.stopped)).toBe(true);
   fake.failVoice = true;
   await expect(service.prepareVoice('en')).rejects.toThrow('Голос ещё не загружен');
+});
+it('auditions voice before Start and stops speech immediately when disabled', async () => {
+  const config = withVoiceEnabled(defaultConfig('degree'), true);
+  service.configurePracticeChannels(config.channels);
+  expect(await service.previewVoice('en', 4)).toBe(true);
+  expect(fake.sources).toHaveLength(1);
+  expect(fake.sources[0].started).toBe(0);
+  expect(fake.transport.state).toBe('stopped');
+  service.configurePracticeChannels(withVoiceEnabled(config, false).channels);
+  expect(fake.sources[0].stopped).toBe(true);
+});
+it('cancels voice previews still loading when voice is disabled or the screen is left', async () => {
+  const config = withVoiceEnabled(defaultConfig('degree'), true);
+  service.configurePracticeChannels(config.channels);
+  const pending = service.previewVoice('pl', 2);
+  service.configurePracticeChannels(withVoiceEnabled(config, false).channels);
+  expect(await pending).toBe(false);
+  service.configurePracticeChannels(config.channels);
+  const leaving = service.previewVoice('pl', 3);
+  service.stopAll();
+  expect(await leaving).toBe(false);
+  expect(fake.sources).toHaveLength(0);
+});
+it('auditions chord shapes without starting the clock and releases them on hint off', async () => {
+  const config = withHintMode(defaultConfig('chord'), 'keyboard');
+  const sound = {
+    channel: 'harmony' as const,
+    notes: [60, 64, 67],
+    durationBeats: 4,
+    velocity: 0.6,
+  };
+  service.configurePracticeChannels(config.channels);
+  await service.previewPractice([sound], 60);
+  const instrument = fake.instruments.find((item) => item.attacks.length > 0)!;
+  expect(instrument.attacks[0][0]).toEqual([60, 64, 67]);
+  expect(fake.transport.state).toBe('stopped');
+  const releases = instrument.releases;
+  service.configurePracticeChannels(withHintMode(config, 'hidden').channels);
+  expect(instrument.releases).toBeGreaterThan(releases);
+  service.configurePracticeChannels(config.channels);
+  const pending = service.previewPractice([sound], 60);
+  service.configurePracticeChannels(withHintMode(config, 'hidden').channels);
+  await pending;
+  expect(instrument.attacks).toHaveLength(1);
 });

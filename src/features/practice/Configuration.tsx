@@ -10,6 +10,9 @@ import {
   STYLES,
   TRAINERS,
   VOICINGS,
+  keyboardHintEnabled,
+  withHintMode,
+  withVoiceEnabled,
 } from '../../core/practice/config';
 import { compatibleTemplates, configProblems } from '../../core/practice/harmony';
 import type { Channel, PracticeConfig, TrainerType } from '../../core/practice/types';
@@ -48,13 +51,17 @@ export function ChannelsForm({
               type="checkbox"
               checked={config.channels[channel].enabled}
               onChange={(e) =>
-                onChange({
-                  ...config,
-                  channels: {
-                    ...config.channels,
-                    [channel]: { ...config.channels[channel], enabled: e.target.checked },
-                  },
-                })
+                onChange(
+                  channel === 'voice'
+                    ? withVoiceEnabled(config, e.target.checked)
+                    : {
+                        ...config,
+                        channels: {
+                          ...config.channels,
+                          [channel]: { ...config.channels[channel], enabled: e.target.checked },
+                        },
+                      },
+                )
               }
             />
             {labels[channel]}
@@ -277,6 +284,34 @@ export function PracticeConfiguration() {
         <p className="muted">
           {meterInfo(config.meter).label}. Jazz и Blues используют септаккорды, начиная с уровня 3.
         </p>
+        <div className="practice-quick-assistance">
+          <label className="practice-check">
+            <input
+              type="checkbox"
+              checked={keyboardHintEnabled(config)}
+              onChange={(e) =>
+                change(withHintMode(config, e.target.checked ? 'keyboard' : 'hidden'))
+              }
+            />
+            Клавиши и звук примера
+          </label>
+          <label className="practice-check">
+            <input
+              type="checkbox"
+              checked={
+                config.channels.voice.enabled &&
+                config.voiceTiming !== 'off' &&
+                config.channels.voice.volume > 0
+              }
+              onChange={(e) => change(withVoiceEnabled(config, e.target.checked))}
+            />
+            Озвучивать ступени
+          </label>
+          <p className="muted">
+            Подсказку и голос можно включать прямо во время тренировки. Голос произносит номера
+            ступеней на английском или польском.
+          </p>
+        </div>
       </section>
       {type === 'degree' && (
         <section className="practice-panel">
@@ -603,14 +638,16 @@ export function PracticeConfiguration() {
           <Field label="Подсказки">
             <select
               value={config.hintMode}
-              onChange={(e) => patch('hintMode', e.target.value as PracticeConfig['hintMode'])}
+              onChange={(e) =>
+                change(withHintMode(config, e.target.value as PracticeConfig['hintMode']))
+              }
             >
               {Object.entries({
                 hidden: 'Скрыты',
                 'chord-name': 'Название аккорда',
                 notes: 'Название и ноты',
-                keyboard: 'Клавиатура',
-                full: 'Полная демонстрация',
+                keyboard: 'Клавиши и звук',
+                full: 'Полная подсказка со звуком',
               }).map(([id, label]) => (
                 <option key={id} value={id}>
                   {label}

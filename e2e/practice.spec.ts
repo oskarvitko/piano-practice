@@ -33,7 +33,7 @@ for (const trainer of ['degree', 'chord', 'style', 'fill', 'scale']) {
     await expect(session).toHaveAttribute('data-phase', 'countdown');
     await expect(session).toHaveAttribute('data-phase', 'playing');
     await page.getByRole('button', { name: 'Сложно', exact: true }).click();
-    await page.getByRole('button', { name: 'Подсказка', exact: true }).click();
+    await page.getByRole('button', { name: 'Разбор', exact: true }).click();
     await expect(session).toHaveAttribute('data-phase', 'hint');
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: 'Разбор задания' })).toBeVisible();
@@ -82,6 +82,116 @@ test('restores a paused session and fits landscape without horizontal overflow',
   // Browser lifecycle notifications pause and checkpoint the active audio session.
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
   await expect(page.locator('.practice-session')).toHaveAttribute('data-phase', 'paused');
+});
+
+/** Measure the real signal reaching the audio destination, including all output gains. */
+async function observeAudio(page: Page) {
+  await page.addInitScript(() => {
+    if (typeof AudioNode === 'undefined') return;
+    const probe = { peak: 0, level: 0 };
+    Object.assign(window, { practiceAudioProbe: probe });
+    const connect = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function (...args: Parameters<typeof connect>) {
+      const result = Reflect.apply(connect, this, args);
+      if (args[0] instanceof AudioDestinationNode) {
+        const analyser = this.context.createAnalyser();
+        analyser.fftSize = 2048;
+        Reflect.apply(connect, this, [analyser]);
+        const samples = new Float32Array(analyser.fftSize);
+        setInterval(() => {
+          analyser.getFloatTimeDomainData(samples);
+          probe.level = samples.reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0);
+          probe.peak = Math.max(probe.peak, probe.level);
+        }, 20);
+      }
+      return result;
+    } as typeof connect;
+  });
+}
+async function audioLevel(page: Page, key: 'peak' | 'level' = 'peak') {
+  return page.evaluate(
+    (property) =>
+      (window as Window & { practiceAudioProbe: { peak: number; level: number } })
+        .practiceAudioProbe[property],
+    key,
+  );
+}
+
+test('visible voice control plays a real signal before Start, even with previews hidden', async ({
+  page,
+  browserName,
+}) => {
+  test.skip(
+    browserName === 'webkit' && process.platform === 'win32',
+    'Windows WebKit has no Web Audio.',
+  );
+  await observeAudio(page);
+  await page.goto('#/practice/degree');
+  await page.getByText('Дополнительные настройки', { exact: true }).click();
+  await page.getByRole('combobox', { name: 'Предпросмотр', exact: true }).selectOption('0');
+  await page.getByRole('combobox', { name: 'Когда произносить', exact: true }).selectOption('off');
+  await page.getByLabel('Громкость: Голос ступеней', { exact: true }).fill('0');
+  await page.getByRole('button', { name: 'Подготовить тренировку' }).click();
+  const voice = page.getByRole('switch', { name: 'Голос', exact: true });
+  await expect(voice).not.toBeChecked();
+  await page.getByRole('button', { name: 'Проверить голос', exact: true }).click();
+  await expect(voice).toBeChecked();
+  await expect(page.getByText('English · при смене задания', { exact: true })).toBeVisible();
+  await expect.poll(() => audioLevel(page)).toBeGreaterThan(0.005);
+  await expect(page.locator('.practice-session')).toHaveAttribute('data-phase', 'ready');
+  await voice.uncheck();
+  await expect.poll(() => audioLevel(page, 'level')).toBeLessThan(0.0001);
+  await page.reload();
+  await expect(voice).not.toBeChecked();
+});
+
+test('hint shows and plays the assigned chord inline, follows changes and switches off together', async ({
+  page,
+  browserName,
+}) => {
+  test.skip(
+    browserName === 'webkit' && process.platform === 'win32',
+    'Windows WebKit has no Web Audio.',
+  );
+  await observeAudio(page);
+  await prepare(page, 'chord');
+  const hint = page.getByRole('button', { name: 'Подсказка', exact: true });
+  const piano = page.getByRole('region', { name: 'Подсказка текущего задания', exact: true });
+  await expect(piano).toHaveCount(0);
+  await hint.click();
+  await expect(hint).toHaveAttribute('aria-pressed', 'true');
+  await expect(piano).toBeVisible();
+  await expect(piano.locator('.left-hand').first()).toBeVisible();
+  await expect(piano.locator('.right-hand').first()).toBeVisible();
+  await expect(piano.locator('.practice-hint-caption strong')).toHaveText(
+    await page.locator('.practice-task-value').innerText(),
+  );
+  await expect.poll(() => audioLevel(page)).toBeGreaterThan(0.005);
+  await expect(page.locator('.practice-session')).toHaveAttribute('data-phase', 'ready');
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Завершить', exact: true })).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Mute the independent metronome so silence means the musical hint really stopped.
+  await page.getByRole('button', { name: 'Настройки тренировки', exact: true }).click();
+  await page.getByLabel('Метроном', { exact: true }).uncheck();
+  await page.getByRole('button', { name: 'Готово', exact: true }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.locator('.practice-session')).toHaveAttribute('data-phase', 'playing');
+  const next = await page.locator('.practice-neighbours > div').last().innerText();
+  await expect(page.locator('.practice-task-value')).toHaveText(next.replace('Дальше', '').trim());
+  await expect(piano.locator('.practice-hint-caption strong')).toHaveText(
+    await page.locator('.practice-task-value').innerText(),
+  );
+  await hint.click();
+  await expect(piano).toHaveCount(0);
+  await expect(page.locator('.practice-session')).toHaveAttribute('data-phase', 'playing');
+  await expect.poll(() => audioLevel(page, 'level')).toBeLessThan(0.0001);
+  await page.getByRole('button', { name: 'Пауза', exact: true }).click();
+  await page.reload();
+  await expect(hint).toHaveAttribute('aria-pressed', 'false');
+  await expect(piano).toHaveCount(0);
 });
 
 test('offline app and both local voice languages survive a reload', async ({

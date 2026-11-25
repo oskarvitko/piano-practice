@@ -72,6 +72,38 @@ export const FILLS: Record<FillKind, string> = {
 };
 export const keyName = (key: MusicalKey) =>
   `${KEY_NAMES[key.pc]} ${key.mode === 'major' ? 'major' : 'minor'}`;
+export const keyboardHintEnabled = (config: PracticeConfig) =>
+  config.hintMode === 'keyboard' || config.hintMode === 'full';
+
+/** The visible hint switch controls both the diagram and its musical demonstration. */
+export function withHintMode(
+  config: PracticeConfig,
+  hintMode: PracticeConfig['hintMode'],
+): PracticeConfig {
+  const enabled = hintMode === 'keyboard' || hintMode === 'full';
+  if (!enabled && !keyboardHintEnabled(config)) return { ...config, hintMode };
+  const channels = { ...config.channels };
+  for (const channel of ['bass', 'harmony', 'melody'] as const)
+    channels[channel] = {
+      ...channels[channel],
+      enabled,
+      volume: enabled && channels[channel].volume === 0 ? 0.65 : channels[channel].volume,
+    };
+  return { ...config, hintMode, channels };
+}
+export function withVoiceEnabled(config: PracticeConfig, enabled: boolean): PracticeConfig {
+  return {
+    ...config,
+    voiceTiming: enabled && config.voiceTiming === 'off' ? 'on-change' : config.voiceTiming,
+    channels: {
+      ...config.channels,
+      voice: {
+        enabled,
+        volume: enabled && config.channels.voice.volume === 0 ? 0.9 : config.channels.voice.volume,
+      },
+    },
+  };
+}
 export function defaultConfig(trainer: TrainerType): PracticeConfig {
   return {
     trainer,
